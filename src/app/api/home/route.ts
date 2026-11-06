@@ -1,93 +1,107 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { handle } from "@/lib/api-utils";
-import { serializeMedia } from "@/lib/serialize";
-import { discoverCategory, importLightweight } from "@/lib/providers/engine";
+import { discoverCategory } from "@/lib/providers/engine";
+import type { WorkDTO } from "@/lib/serialize";
+import { TTL, cached } from "@/lib/cache";
 
-// Aggregate payload for the home view — built from LIVE provider data.
-// Discovery pulls real "popular" listings from installed providers; the top
-// items are materialized into unified Media (lightweight import) so cards
-// have real slugs and the hero can use real cover art. No fictional titles.
+// Aggregate payload for the home view — 100% LIVE provider data.
+// Rails are pulled from provider "popular" listings (TTL-cached); the hero
+// picks the best real artwork from those same rails. Nothing is persisted.
+
+interface ContinueItem {
+  provider: string;
+  externalId: string;
+  ref: string;
+  category: string;
+  kind: string;
+  unitKey: string;
+  unitLabel: string | null;
+  positionSec: number | null;
+  pageIndex: number | null;
+  completed: boolean;
+  titleSnapshot: string;
+  coverSnapshot: string | null;
+  updatedAt: Date;
+}
+
 export async function GET() {
   return handle(async () => {
     const user = await getCurrentUser();
 
-    const RAIL_CATEGORIES = ["ANIME", "MANGA", "ILLUSTRATION", "MANHWA", "AV", "GAME"];
+    const RAIL_CATEGORIES = ["ANIME", "MANGA", "MANHWA", "ILLUSTRATION", "AV", "GAME"];
     const discoveries = await Promise.all(
-      RAIL_CATEGORIES.map((c) =>
-        discoverCategory(c).catch(() => ({ category: c, rails: [] })),
-      ),
+      RAIL_CATEGORIES.map((c) => cached(`home:${c}`, "rails", TTL.RAILS, () => discoverCategory(c)).catch(() => ({ category: c, kind: null, rails: [] }))),
     );
 
-    // Materialize the top items of each rail as unified Media (lightweight).
-    const categories: Record<string, unknown[]> = {};
+    // Merge rails per category into a single deduped list (external-ref dedup,
+    // computed per request — no local index).
+    const categories: Record<string, WorkDTO[]> = {};
+    const heroPool: WorkDTO[] = [];
     for (const d of discoveries) {
-      const merged: { slug: string; providerName: string }[] = [];
+      const merged: WorkDTO[] = [];
       const seen = new Set<string>();
       for (const rail of d.rails) {
-        for (const item of rail.items.slice(0, 10)) {
-          const key = item.title.toLowerCase().slice(0, 120);
-          if (seen.has(key)) continue;
-          seen.add(key);
-          try {
-            const media = await importLightweight(item.id);
-            if (media) merged.push({ slug: media.slug, providerName: rail.providerName });
-          } catch {
-            // one bad row never breaks the rail
-          }
+        for (const item of rail.items) {
+          if (seen.has(item.ref)) continue;
+          seen.add(item.ref);
+          merged.push(item);
         }
       }
-      // hydrate DTOs in popularity order
-      const slugs = merged.map((m) => m.slug);
-      if (slugs.length) {
-        const rows = await db.media.findMany({ where: { slug: { in: slugs } }, orderBy: { popularity: "desc" } });
-        categories[d.category] = rows.slice(0, 14).map(serializeMedia);
-      } else {
-        categories[d.category] = [];
+      categories[d.category] = merged.sort((a, b) => b.popularity - a.popularity).slice(0, 14);
+      for (const w of merged) {
+        if (w.bannerUrl || w.coverUrl) heroPool.push(w);
       }
     }
 
-    // Hero: prefer items with real banners (AniList) else covers.
-    const heroPool = await db.media.findMany({
-      where: { OR: [{ bannerUrl: { not: null } }, { coverUrl: { not: null } }] },
-      orderBy: { popularity: "desc" },
-      take: 8,
-    });
+    const hero = heroPool
+      .sort((a, b) => (b.bannerUrl ? 1 : 0) - (a.bannerUrl ? 1 : 0) || b.popularity - a.popularity)
+      .slice(0, 8);
 
-    let continue_: unknown[] = [];
+    let continue_: ContinueItem[] = [];
     if (user) {
       const rows = await db.progress.findMany({
         where: { userId: user.id, completed: false },
         orderBy: { updatedAt: "desc" },
-        take: 8,
-        include: { media: true },
+        take: 12,
       });
       const seen = new Set<string>();
       continue_ = rows
-        .filter((r) => (seen.has(r.mediaId) ? false : (seen.add(r.mediaId), true)))
+        .filter((r) => {
+          const ref = `${r.providerId}:${r.externalId}`;
+          if (seen.has(ref)) return false;
+          seen.add(ref);
+          return true;
+        })
         .map((r) => ({
-          media: serializeMedia(r.media),
+          provider: r.providerId,
+          externalId: r.externalId,
+          ref: `${r.providerId}:${r.externalId}`,
+          category: r.category,
           kind: r.kind,
-          itemId: r.itemId,
+          unitKey: r.unitKey,
+          unitLabel: r.unitLabel,
           positionSec: r.positionSec,
+          pageIndex: r.pageIndex,
           completed: r.completed,
+          titleSnapshot: r.titleSnapshot,
+          coverSnapshot: r.coverSnapshot,
           updatedAt: r.updatedAt,
         }));
     }
 
+    const { listProviders } = await import("@/lib/providers/engine");
+    const { installed } = await listProviders();
     const stats = {
-      media: await db.media.count(),
-      providers: await db.provider.count({ where: { installed: true } }),
-      chapters: await db.chapter.count(),
-      episodes: await db.episode.count(),
-      galleryImages: await db.galleryImage.count(),
-      characters: await db.character.count(),
+      providers: installed.length,
+      degraded: installed.filter((p) => p.status === "ERROR").length,
+      categories: RAIL_CATEGORIES.length,
     };
 
     return NextResponse.json({
-      hero: heroPool.map(serializeMedia),
-      popular: heroPool.map(serializeMedia),
+      hero,
+      popular: hero,
       categories,
       continue: continue_,
       stats,

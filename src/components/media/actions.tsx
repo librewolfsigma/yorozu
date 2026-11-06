@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Library as LibraryIcon, Heart, FolderPlus, Flag, Star, Trash2, Download,
+  Library as LibraryIcon, Heart, FolderPlus, Flag, Star, Trash2,
   Loader2, Check, ChevronDown, ExternalLink,
 } from "lucide-react";
-import { api, post, patch, del } from "@/lib/client-api";
+import { post, del } from "@/lib/client-api";
 import { useAuth } from "@/components/providers";
 import { LIBRARY_STATUSES } from "@/lib/category-meta";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import type { WorkRefInfo } from "@/lib/serialize";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -35,24 +36,31 @@ export interface LibraryState {
   notes: string | null;
 }
 
-export function useLibraryMutation(mediaId: string) {
+/** Library entries are keyed by the external ref (provider, externalId). */
+export function useLibraryMutation(work: WorkRefInfo) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
-      post("/api/library", { mediaId, ...payload }),
+      post("/api/library", {
+        provider: work.provider,
+        externalId: work.externalId,
+        category: work.category,
+        title: work.title,
+        cover: work.coverUrl ?? undefined,
+        ...payload,
+      }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["media", mediaId] });
       void qc.invalidateQueries({ queryKey: ["library"] });
       void qc.invalidateQueries({ queryKey: ["home"] });
+      void qc.invalidateQueries({ queryKey: ["work"] });
     },
     onError: (e: Error) => toast.error("Library update failed", { description: e.message }),
   });
 }
 
-export function AddToLibraryButton({ mediaId, library, hub }: { mediaId: string; library: LibraryState | null; hub: string }) {
+export function AddToLibraryButton({ work, library, hub }: { work: WorkRefInfo; library: LibraryState | null; hub: string }) {
   const { user, demoLogin } = useAuth();
-  const { navigate } = useHashRoute();
-  const mutation = useLibraryMutation(mediaId);
+  const mutation = useLibraryMutation(work);
 
   if (!user) {
     return (
@@ -110,9 +118,9 @@ export function AddToLibraryButton({ mediaId, library, hub }: { mediaId: string;
   );
 }
 
-export function FavoriteButton({ mediaId, favorite, hub }: { mediaId: string; favorite: boolean; hub: string }) {
+export function FavoriteButton({ work, favorite, hub }: { work: WorkRefInfo; favorite: boolean; hub: string }) {
   const { user } = useAuth();
-  const mutation = useLibraryMutation(mediaId);
+  const mutation = useLibraryMutation(work);
   return (
     <button
       className={cn(
@@ -129,18 +137,25 @@ export function FavoriteButton({ mediaId, favorite, hub }: { mediaId: string; fa
   );
 }
 
-export function CollectionPicker({ mediaId, hub, collections }: {
-  mediaId: string;
+export function CollectionPicker({ work, hub, collections }: {
+  work: WorkRefInfo;
   hub: string;
   collections: { id: string; name: string; hasItem: boolean }[];
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const refPayload = {
+    provider: work.provider,
+    externalId: work.externalId,
+    category: work.category,
+    title: work.title,
+    cover: work.coverUrl ?? undefined,
+  };
   const createAndAdd = useMutation({
     mutationFn: async () => {
       const res = await post<{ collection: { id: string } }>("/api/collections", { name });
-      return post(`/api/collections/${res.collection.id}/items`, { mediaId });
+      return post(`/api/collections/${res.collection.id}/items`, refPayload);
     },
     onSuccess: () => {
       void qc.invalidateQueries();
@@ -152,8 +167,10 @@ export function CollectionPicker({ mediaId, hub, collections }: {
   });
   const toggle = useMutation({
     mutationFn: async (c: { id: string; hasItem: boolean }) => {
-      if (c.hasItem) return del(`/api/collections/${c.id}/items?mediaId=${mediaId}`);
-      return post(`/api/collections/${c.id}/items`, { mediaId });
+      if (c.hasItem) {
+        return del(`/api/collections/${c.id}/items?provider=${encodeURIComponent(work.provider)}&externalId=${encodeURIComponent(work.externalId)}`);
+      }
+      return post(`/api/collections/${c.id}/items`, refPayload);
     },
     onSuccess: () => {
       void qc.invalidateQueries();
@@ -271,56 +288,8 @@ export function ReportDialog({ targetType, targetId }: { targetType: string; tar
   );
 }
 
-export function DownloadButton({ mediaId, label, kind, hub }: {
-  mediaId: string; label: string; kind: string; hub: string;
-}) {
-  const { user } = useAuth();
-  const qc = useQueryClient();
-  const mutation = useMutation({
-    mutationFn: () =>
-      post<{ download: { id: string; fileUrl: string } }>("/api/downloads", { mediaId, label, kind }),
-    onSuccess: (data) => {
-      toast.success("Download started", { description: `${label} — streaming the real file to your browser.` });
-      void qc.invalidateQueries({ queryKey: ["downloads"] });
-      // The fileUrl streams the actual bytes with Content-Disposition: attachment.
-      const anchor = document.createElement("a");
-      anchor.href = data.download.fileUrl;
-      anchor.download = "";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-    },
-    onError: (e: Error) => {
-      if (e.message.includes("Sign in")) {
-        toast.error("Sign in required", { description: "Create an account or use the demo login to download." });
-      } else {
-        toast.error(e.message);
-      }
-    },
-  });
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="gap-1.5 rounded-lg font-semibold"
-      style={{ color: hub, background: `${hub}14` }}
-      onClick={() => {
-        if (!user) {
-          toast.error("Sign in required", { description: "Create an account or use the demo login first." });
-          return;
-        }
-        mutation.mutate();
-      }}
-      disabled={mutation.isPending}
-    >
-      {mutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-      Download
-    </Button>
-  );
-}
-
-export function ReviewSection({ mediaId, reviews, hub, rating, ratingCount }: {
-  mediaId: string;
+export function ReviewSection({ work, reviews, hub, rating, ratingCount }: {
+  work: WorkRefInfo;
   reviews: { id: string; score: number; title: string | null; body: string | null; createdAt: string; user: { username: string; displayName: string; avatarUrl: string | null }; isMine: boolean }[];
   hub: string;
   rating: number;
@@ -332,19 +301,30 @@ export function ReviewSection({ mediaId, reviews, hub, rating, ratingCount }: {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const mine = reviews.find((r) => r.isMine);
+  const invalidateWork = () => void qc.invalidateQueries({ queryKey: ["work"] });
 
   const submit = useMutation({
-    mutationFn: () => post("/api/reviews", { mediaId, score: Number(score), title, body }),
+    mutationFn: () =>
+      post("/api/reviews", {
+        provider: work.provider,
+        externalId: work.externalId,
+        category: work.category,
+        titleSnapshot: work.title,
+        score: Number(score),
+        title,
+        body,
+      }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["media", mediaId] });
+      invalidateWork();
       toast.success(mine ? "Review updated" : "Review posted");
     },
     onError: (e: Error) => toast.error(e.message),
   });
   const remove = useMutation({
-    mutationFn: () => del(`/api/reviews?mediaId=${mediaId}`),
+    mutationFn: () =>
+      del(`/api/reviews?provider=${encodeURIComponent(work.provider)}&externalId=${encodeURIComponent(work.externalId)}`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["media", mediaId] });
+      invalidateWork();
       toast.success("Review deleted");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -403,7 +383,6 @@ export function ReviewSection({ mediaId, reviews, hub, rating, ratingCount }: {
           <div key={r.id} className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center gap-2.5">
               {r.user.avatarUrl ? (
-                 
                 <img src={r.user.avatarUrl} alt="" className="h-8 w-8 rounded-lg" />
               ) : (
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-xs font-bold">{r.user.username.slice(0, 1).toUpperCase()}</span>
@@ -425,32 +404,25 @@ export function ReviewSection({ mediaId, reviews, hub, rating, ratingCount }: {
   );
 }
 
-export function ProviderChips({ providers, links }: {
-  providers: { id: string; name: string; status: string }[];
-  links: { providerId: string; externalUrl: string | null }[];
+export function ProviderChips({ provider }: {
+  provider: { id: string; name: string; status: string; externalUrl?: string | null };
 }) {
   const { navigate } = useHashRoute();
-  if (providers.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-semibold text-muted-foreground">Available from</span>
-      {providers.map((p) => {
-        const link = links.find((l) => l.providerId === p.id);
-        return (
-          <span key={p.id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold">
-            <span className={cn("h-1.5 w-1.5 rounded-full", p.status === "ACTIVE" ? "bg-[#3BD47A]" : p.status === "ERROR" ? "bg-[#EF5B6B]" : "bg-muted")} />
-            {p.name}
-            {link?.externalUrl && (
-              <a href={link.externalUrl} target="_blank" rel="noreferrer" aria-label={`Open ${p.name} listing`} className="text-muted-foreground hover:text-foreground">
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            )}
-            <button className="text-muted-foreground underline-offset-2 hover:underline" onClick={() => navigate(`/source/${p.id}`)}>
-              browse
-            </button>
-          </span>
-        );
-      })}
+      <span className="text-xs font-semibold text-muted-foreground">Source</span>
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold">
+        <span className={cn("h-1.5 w-1.5 rounded-full", provider.status === "ACTIVE" ? "bg-[#3BD47A]" : provider.status === "ERROR" ? "bg-[#EF5B6B]" : "bg-muted")} />
+        {provider.name}
+        {provider.externalUrl && (
+          <a href={provider.externalUrl} target="_blank" rel="noreferrer" aria-label={`Open ${provider.name} listing`} className="text-muted-foreground hover:text-foreground">
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+        <button className="text-muted-foreground underline-offset-2 hover:underline" onClick={() => navigate(`/source/${provider.id}`)}>
+          browse
+        </button>
+      </span>
     </div>
   );
 }

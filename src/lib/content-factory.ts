@@ -1,8 +1,7 @@
-// Utility helpers shared across the platform. NOTE: the original
-// placeholder-artwork generators (fake pages/covers/galleries) were removed
-// when Yozora switched to real provider integrations — every cover, page and
-// gallery image now comes from a real provider URL. What remains:
-// hashing, title normalization, per-category accents and letter avatars.
+// Pure content utilities shared across the platform (hashing, title
+// normalization, per-category accents). Client-first note: these helpers do
+// NOT generate or fabricate any media — artwork/pages/streams always come
+// from real provider URLs (docs/CLIENT_ARCHITECTURE.md).
 
 export function hashString(s: string): number {
   let h = 2166136261 >>> 0;

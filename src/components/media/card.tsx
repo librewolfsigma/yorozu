@@ -1,24 +1,50 @@
 "use client";
 
 import { Star, Play, Plus, Check } from "lucide-react";
-import { categoryMeta, fmtNumber, STATUS_LABELS } from "@/lib/category-meta";
+import { categoryMeta, videoKindLabel, fmtNumber, STATUS_LABELS } from "@/lib/category-meta";
 import { navigate } from "@/hooks/use-hash-route";
-import type { MediaDTO } from "@/lib/serialize";
+import type { WorkDTO } from "@/lib/serialize";
 
+/** Card-level projection of a live WorkDTO — every list/rail/grid uses this. */
 export interface MediaCardData {
-  id: string; slug: string; title: string; coverUrl: string | null;
-  category: string; format: string | null; status: string | null;
-  year: number | null; rating: number; popularity: number;
-  genres?: string[]; accent?: string | null;
+  provider: string;
+  externalId: string;
+  ref: string;
+  title: string;
+  coverUrl: string | null;
+  category: string;
+  videoKind?: string | null;
+  format?: string | null;
+  status?: string | null;
+  year?: number | null;
+  rating?: number | null;
+  popularity: number;
+  genres?: string[];
+  accent?: string | null;
 }
 
-export function fromDTO(m: MediaDTO): MediaCardData {
+export function fromDTO(m: WorkDTO): MediaCardData {
   return {
-    id: m.id, slug: m.slug, title: m.title, coverUrl: m.coverUrl,
-    category: m.category, format: m.format, status: m.status,
-    year: m.year, rating: m.rating, popularity: m.popularity,
-    genres: m.genres, accent: m.accent,
+    provider: m.provider,
+    externalId: m.externalId,
+    ref: m.ref,
+    title: m.title,
+    coverUrl: m.coverUrl,
+    category: m.category,
+    videoKind: m.videoKind,
+    format: m.format,
+    status: m.status,
+    year: m.year,
+    rating: m.rating,
+    popularity: m.popularity,
+    genres: m.genres,
+    accent: m.accent,
   };
+}
+
+/** Every external work is addressed by ?p=<provider>&id=<externalId>. */
+export function workHref(provider: string, externalId: string): string {
+  return `/media?p=${encodeURIComponent(provider)}&id=${encodeURIComponent(externalId)}`;
 }
 
 export function MediaCard({
@@ -42,10 +68,10 @@ export function MediaCard({
     <div
       className={`poster-card group cursor-pointer select-none ${width ? "shrink-0" : ""}`}
       style={width ? { width } : undefined}
-      onClick={() => navigate(`/media/${media.slug}`)}
+      onClick={() => navigate(workHref(media.provider, media.externalId))}
       role="link"
       tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && navigate(`/media/${media.slug}`)}
+      onKeyDown={(e) => e.key === "Enter" && navigate(workHref(media.provider, media.externalId))}
       aria-label={`${media.title} (${meta.label})`}
     >
       <div
@@ -53,7 +79,6 @@ export function MediaCard({
         style={{ ["--hub" as string]: hub }}
       >
         {media.coverUrl ? (
-           
           <img
             src={media.coverUrl}
             alt={`${media.title} cover`}
@@ -65,7 +90,7 @@ export function MediaCard({
         )}
 
         {/* score badge */}
-        {media.rating > 0 && (
+        {media.rating != null && media.rating > 0 && (
           <div className="absolute left-1.5 top-1.5 z-10 inline-flex items-center gap-1 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-bold text-[#FFBE4A] backdrop-blur-sm">
             <Star className="h-3 w-3 fill-[#FFBE4A]" /> {media.rating.toFixed(1)}
           </div>
@@ -78,6 +103,13 @@ export function MediaCard({
             style={{ background: "rgba(0,0,0,0.65)", color: hub }}
           >
             {STATUS_LABELS[media.status]}
+          </div>
+        )}
+
+        {/* AV subcategory badge — AV/JAV/PMV/HMV/CREATOR stay distinct by design */}
+        {media.videoKind && (
+          <div className="absolute bottom-1.5 right-1.5 z-10 max-w-[92%] truncate rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
+            {videoKindLabel(media.videoKind)}
           </div>
         )}
 
@@ -114,7 +146,7 @@ export function MediaCard({
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <span style={{ color: hub }} className="font-semibold">{meta.label}</span>
-          {media.year && <span>· {media.year}</span>}
+          {media.year != null && <span>· {media.year}</span>}
           {media.format && <span>· {media.format}</span>}
         </p>
         {footer}
@@ -127,7 +159,7 @@ export function MediaGrid({ items, className }: { items: MediaCardData[]; classN
   return (
     <div className={`grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 ${className ?? ""}`}>
       {items.map((m) => (
-        <MediaCard key={m.id} media={m} />
+        <MediaCard key={m.ref} media={m} />
       ))}
     </div>
   );
@@ -145,7 +177,7 @@ export function MediaRail({
   return (
     <div className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1 snap-x">
       {items.map((m, i) => (
-        <div key={m.id} className="snap-start">
+        <div key={m.ref} className="snap-start">
           <MediaCard media={m} width={cardWidth} showRank={showRank} rank={i + 1} />
         </div>
       ))}

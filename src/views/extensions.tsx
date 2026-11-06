@@ -4,11 +4,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   Puzzle, RefreshCw, Power, Trash2, Settings2, Download, CheckCircle2,
-  XCircle, Loader2, Store, ChevronRight, AlertTriangle,
+  XCircle, Loader2, Store, ChevronRight, AlertTriangle, Play, BookOpen,
+  Image as ImageIcon, ExternalLink, KeyRound, type LucideIcon,
 } from "lucide-react";
 import { api, post } from "@/lib/client-api";
 import { useAuth } from "@/components/providers";
-import { categoryMeta } from "@/lib/category-meta";
+import { categoryMeta, videoKindLabel, timeAgo, CATEGORIES } from "@/lib/category-meta";
 import { navigate } from "@/hooks/use-hash-route";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -22,21 +23,106 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { timeAgo } from "@/lib/category-meta";
 
-interface ProviderRow {
-  id: string; name: string; category: string; description: string;
-  version: string; author: string | null; homepage: string | null;
-  capabilities: string[]; configSchema: { key: string; label: string; type: string; required?: boolean; options?: string[]; help?: string }[];
-  config: Record<string, unknown>; status: string; lastError: string | null;
-  lastCheckedAt: string | null; installedAt: string; itemCount: number;
-  live: boolean; integration: string | null;
+interface ConfigField {
+  key: string; label: string; type: string;
+  required?: boolean; options?: string[]; help?: string;
 }
-interface RepositoryRow {
-  id: string; name: string; category: string; description: string;
-  version: string; author: string; homepage: string;
-  capabilities: string[]; configSchema: unknown[];
-  live: boolean; integration: string | null;
+/** Matches the backend ProviderDTO — availability is honest, adapter-derived. */
+interface ProviderRow {
+  id: string; name: string; category: string; videoKind: string | null;
+  description: string; version: string; author: string; homepage: string;
+  capabilities: string[]; configSchema: ConfigField[];
+  config: Record<string, string>;
+  status: string; lastError: string | null; lastCheckedAt: string | null;
+  installed: boolean; integration: string | null; configRequired: boolean;
+  availability: { watch: boolean; read: boolean; view: boolean };
+}
+
+const CATEGORY_ORDER = CATEGORIES.map((c) => c.key);
+
+function groupByCategory(rows: ProviderRow[]): [string, ProviderRow[]][] {
+  const map = new Map<string, ProviderRow[]>();
+  for (const r of rows) {
+    if (!map.has(r.category)) map.set(r.category, []);
+    map.get(r.category)!.push(r);
+  }
+  return [...map.entries()].sort((a, b) => {
+    const ia = CATEGORY_ORDER.indexOf(a[0]);
+    const ib = CATEGORY_ORDER.indexOf(b[0]);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a[0].localeCompare(b[0]);
+  });
+}
+
+function CategoryHeader({ category, count }: { category: string; count: number }) {
+  const meta = categoryMeta(category);
+  return (
+    <h3 className="mb-2 flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
+      <meta.icon className="h-3.5 w-3.5" style={{ color: meta.hub }} />
+      {meta.label}
+      <span className="font-normal normal-case tracking-normal">({count})</span>
+    </h3>
+  );
+}
+
+function AvailabilityChips({ a }: { a: ProviderRow["availability"] }) {
+  const chips: { icon: LucideIcon; label: string; color: string }[] = [];
+  if (a.watch) chips.push({ icon: Play, label: "Watch", color: "#3DB4F2" });
+  if (a.read) chips.push({ icon: BookOpen, label: "Read", color: "#3ED6B0" });
+  if (a.view) chips.push({ icon: ImageIcon, label: "View", color: "#AE8BFF" });
+  if (chips.length === 0) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground"
+        title="No in-app playback or reading — this source opens on its own official page"
+      >
+        <ExternalLink className="h-3 w-3" /> External only
+      </span>
+    );
+  }
+  return (
+    <>
+      {chips.map((c) => (
+        <span
+          key={c.label}
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold"
+          style={{ background: `${c.color}1a`, color: c.color }}
+        >
+          <c.icon className="h-3 w-3" /> {c.label}
+        </span>
+      ))}
+    </>
+  );
+}
+
+function NeedsApiKeyChip() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-[#FFBE4A]/15 px-2 py-0.5 text-[10px] font-bold text-[#FFBE4A]">
+      <KeyRound className="h-3 w-3" /> Needs API key
+    </span>
+  );
+}
+
+function StatusChip({ status }: { status: string }) {
+  if (status === "ACTIVE") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#3BD47A]/15 px-2 py-0.5 text-[10px] font-bold text-[#3BD47A]">
+        <span className="yz-pulse-dot h-1.5 w-1.5 rounded-full bg-[#3BD47A]" /> Active
+      </span>
+    );
+  }
+  if (status === "ERROR") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#EF5B6B]/15 px-2 py-0.5 text-[10px] font-bold text-[#EF5B6B]">
+        <XCircle className="h-3 w-3" /> Error
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+      <CheckCircle2 className="h-3 w-3" /> Disabled
+    </span>
+  );
 }
 
 export default function ExtensionsView() {
@@ -56,7 +142,7 @@ export default function ExtensionsView() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["providers"],
-    queryFn: () => api<{ installed: ProviderRow[]; repository: RepositoryRow[] }>("/api/providers"),
+    queryFn: () => api<{ installed: ProviderRow[]; repository: ProviderRow[] }>("/api/providers"),
   });
 
   const invalidate = () => {
@@ -76,7 +162,7 @@ export default function ExtensionsView() {
     mutationFn: (id: string) => post("/api/providers", { action: "uninstall", providerId: id }),
     onSuccess: () => {
       invalidate();
-      toast.success("Provider uninstalled (unified database entries kept)");
+      toast.success("Provider uninstalled");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -136,10 +222,9 @@ export default function ExtensionsView() {
       <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#3DB4F2]/25 bg-[#3DB4F2]/10 p-3 text-xs leading-relaxed text-foreground/85">
         <span className="font-bold text-[#3DB4F2]">How it works:</span>
         Every installed provider is a live adapter hitting its upstream API or site — health checks are real requests and
-        any error shown is the provider&apos;s own response. One broken provider never breaks the platform — failed checks are
-        isolated, and unified database entries survive uninstalls. Catalog items appear under
+        any error shown is the provider&apos;s own response. Yozora keeps no local catalog:
         <button className="mx-1 underline" onClick={() => navigate("/browse/ANIME")}>Browse</button>
-        only after import (duplicate-safe).
+        and Search query the installed sources live, and one broken provider never breaks the rest.
       </div>
 
       {isLoading ? (
@@ -148,106 +233,120 @@ export default function ExtensionsView() {
         </div>
       ) : (
         <>
-          {/* installed */}
+          {/* installed — grouped by category */}
           <h2 className="mb-3 text-[15px] font-bold">Installed providers</h2>
-          <div className="space-y-3">
-            {(data?.installed ?? []).map((p) => {
-              const meta = categoryMeta(p.category);
-              return (
-                <div key={p.id} className="rounded-xl border border-border bg-card p-4" style={{ ["--hub" as string]: meta.hub }}>
-                  <div className="flex flex-wrap items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg hub-soft" style={{ color: meta.hub }}>
-                      <meta.icon className="h-5 w-5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-[14px] font-bold">{p.name}</p>
-                        {p.live && p.status === "ACTIVE" && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-[#3BD47A]/15 px-2 py-0.5 text-[10px] font-bold text-[#3BD47A]">
-                            <span className="yz-pulse-dot h-1.5 w-1.5 rounded-full bg-[#3BD47A]" /> Live
-                          </span>
-                        )}
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${meta.hub}1a`, color: meta.hub }}>
-                          {meta.label}
+          {(data?.installed ?? []).length === 0 && (
+            <p className="rounded-xl border border-dashed border-border bg-card/50 p-6 text-center text-sm text-muted-foreground">
+              Nothing installed yet — pick a source from the repository below.
+            </p>
+          )}
+          {groupByCategory(data?.installed ?? []).map(([cat, rows]) => (
+            <div key={cat} className="mb-5 last:mb-0">
+              <CategoryHeader category={cat} count={rows.length} />
+              <div className="space-y-3">
+                {rows.map((p) => {
+                  const meta = categoryMeta(p.category);
+                  return (
+                    <div key={p.id} className="rounded-xl border border-border bg-card p-4" style={{ ["--hub" as string]: meta.hub }}>
+                      <div className="flex flex-wrap items-start gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg hub-soft" style={{ color: meta.hub }}>
+                          <meta.icon className="h-5 w-5" />
                         </span>
-                        <span className="text-[11px] text-muted-foreground">v{p.version} · by {p.author ?? "unknown"}</span>
-                        <StatusChip status={p.status} lastError={p.lastError} />
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">{p.description}</p>
-                      {p.integration && (
-                        <div className="mt-1.5">
-                          <p className={cn("text-[11.5px] leading-relaxed text-muted-foreground/80", !expanded.has(p.id) && "line-clamp-1")}>
-                            <span className="font-semibold text-muted-foreground">Integration:</span> {p.integration}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-[14px] font-bold">{p.name}</p>
+                            <StatusChip status={p.status} />
+                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${meta.hub}1a`, color: meta.hub }}>
+                              {meta.label}
+                            </span>
+                            {p.videoKind && (
+                              <span
+                                className="rounded-full bg-[#FF6F91]/12 px-2 py-0.5 text-[10px] font-bold text-[#FF6F91]"
+                                title={`AV subcategory: ${videoKindLabel(p.videoKind)}`}
+                              >
+                                {p.videoKind}
+                              </span>
+                            )}
+                            <span className="text-[11px] text-muted-foreground">v{p.version} · by {p.author}</span>
+                            {p.configRequired && <NeedsApiKeyChip />}
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">{p.description}</p>
+                          {p.integration && (
+                            <div className="mt-1.5">
+                              <p className={cn("text-[11.5px] leading-relaxed text-muted-foreground/80", !expanded.has(p.id) && "line-clamp-1")}>
+                                <span className="font-semibold text-muted-foreground">Integration:</span> {p.integration}
+                              </p>
+                              <button
+                                className="mt-0.5 text-[11px] font-semibold text-muted-foreground/70 underline-offset-2 hover:text-foreground hover:underline"
+                                aria-expanded={expanded.has(p.id)}
+                                onClick={() => toggleExpanded(p.id)}
+                              >
+                                {expanded.has(p.id) ? "Show less" : "Show more"}
+                              </button>
+                            </div>
+                          )}
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            <AvailabilityChips a={p.availability} />
+                            {p.capabilities.map((c) => (
+                              <Badge key={c} variant="secondary" className="rounded-md bg-muted font-mono text-[10px]">{c}</Badge>
+                            ))}
+                          </div>
+                          {p.lastError && (
+                            <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-[#EF5B6B]/25 bg-[#EF5B6B]/10 p-2 text-xs text-[#FF8B96]">
+                              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {p.lastError}
+                            </p>
+                          )}
+                          <p className="mt-1.5 text-[11px] text-muted-foreground/70">
+                            Last checked: {p.lastCheckedAt ? timeAgo(p.lastCheckedAt) : "never"}
                           </p>
-                          <button
-                            className="mt-0.5 text-[11px] font-semibold text-muted-foreground/70 underline-offset-2 hover:text-foreground hover:underline"
-                            aria-expanded={expanded.has(p.id)}
-                            onClick={() => toggleExpanded(p.id)}
-                          >
-                            {expanded.has(p.id) ? "Show less" : "Show more"}
-                          </button>
                         </div>
-                      )}
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        {p.capabilities.map((c) => (
-                          <Badge key={c} variant="secondary" className="rounded-md bg-muted font-mono text-[10px]">{c}</Badge>
-                        ))}
-                        <Badge variant="secondary" className="rounded-md bg-muted text-[10px]">{p.itemCount} catalog items</Badge>
+                        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                          <Button variant="outline" size="sm" className="h-8 gap-1 rounded-lg border-border text-xs" onClick={() => navigate(`/source/${p.id}`)}>
+                            Browse source <ChevronRight className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Health check" title="Health check" onClick={() => runHealth(p.id)} disabled={healthBusy === p.id}>
+                            {healthBusy === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                          </Button>
+                          {p.configSchema.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              aria-label={p.configRequired ? "Configure — API key required" : "Configure"}
+                              title={p.configRequired ? "Configure — API key required" : "Configure"}
+                              onClick={() => {
+                                setConfigValues(Object.fromEntries(Object.entries(p.config ?? {}).map(([k, v]) => [k, String(v)])));
+                                setConfigFor(p);
+                              }}
+                            >
+                              <Settings2 className={cn("h-4 w-4", (p.configRequired || p.lastError) && "text-[#FFBE4A]")} />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={p.status === "DISABLED" ? "Enable" : "Disable"} title={p.status === "DISABLED" ? "Enable" : "Disable"} onClick={() => toggle.mutate(p.id)}>
+                            <Power className={cn("h-4 w-4", p.status === "DISABLED" && "text-[#EF5B6B]")} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-[#EF5B6B]"
+                            aria-label="Uninstall"
+                            title="Uninstall"
+                            onClick={() => {
+                              if (confirm(`Uninstall ${p.name}? Your library entries and history stay; the source can be re-installed anytime.`)) uninstall.mutate(p.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      {p.lastError && (
-                        <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-[#EF5B6B]/25 bg-[#EF5B6B]/10 p-2 text-xs text-[#FF8B96]">
-                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {p.lastError}
-                        </p>
-                      )}
-                      <p className="mt-1.5 text-[11px] text-muted-foreground/70">
-                        Last checked: {p.lastCheckedAt ? timeAgo(p.lastCheckedAt) : "never"}
-                      </p>
                     </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                      <Button variant="outline" size="sm" className="h-8 gap-1 rounded-lg border-border text-xs" onClick={() => navigate(`/source/${p.id}`)}>
-                        Catalog <ChevronRight className="h-3 w-3" />
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Health check" title="Health check" onClick={() => runHealth(p.id)} disabled={healthBusy === p.id}>
-                        {healthBusy === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                      </Button>
-                      {p.configSchema.length > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                          aria-label="Configure"
-                          title="Configure"
-                          onClick={() => {
-                            setConfigValues(Object.fromEntries(Object.entries(p.config ?? {}).map(([k, v]) => [k, String(v)])));
-                            setConfigFor(p);
-                          }}
-                        >
-                          <Settings2 className={cn("h-4 w-4", p.lastError && "text-[#FFBE4A]")} />
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={p.status === "DISABLED" ? "Enable" : "Disable"} title={p.status === "DISABLED" ? "Enable" : "Disable"} onClick={() => toggle.mutate(p.id)}>
-                        <Power className={cn("h-4 w-4", p.status === "DISABLED" && "text-[#EF5B6B]")} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 text-[#EF5B6B]"
-                        aria-label="Uninstall"
-                        title="Uninstall"
-                        onClick={() => {
-                          if (confirm(`Uninstall ${p.name}? Unified database entries are kept.`)) uninstall.mutate(p.id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
 
-          {/* repository */}
+          {/* repository — grouped by category */}
           <h2 className="mb-3 mt-8 flex items-center gap-2 text-[15px] font-bold">
             <Store className="h-4 w-4 text-muted-foreground" /> Repository — available to install
           </h2>
@@ -256,42 +355,62 @@ export default function ExtensionsView() {
               Everything is installed.
             </p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {(data?.repository ?? []).map((p) => {
-                const meta = categoryMeta(p.category);
-                return (
-                  <div key={p.id} className="flex items-start gap-3 rounded-xl border border-dashed border-border bg-card/50 p-4">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted" style={{ color: meta.hub }}>
-                      <meta.icon className="h-5 w-5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[14px] font-bold">
-                        {p.name} <span className="ml-1 text-[11px] font-normal text-muted-foreground">v{p.version} · {meta.label}</span>
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">{p.description}</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      className="h-8 shrink-0 gap-1 rounded-lg border-0 text-xs text-[#04121E]"
-                      style={{ background: meta.hub }}
-                      onClick={() => install.mutate(p.id)}
-                      disabled={install.isPending}
-                    >
-                      {install.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Install
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
+            groupByCategory(data?.repository ?? []).map(([cat, rows]) => (
+              <div key={cat} className="mb-5 last:mb-0">
+                <CategoryHeader category={cat} count={rows.length} />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {rows.map((p) => {
+                    const meta = categoryMeta(p.category);
+                    return (
+                      <div key={p.id} className="flex items-start gap-3 rounded-xl border border-dashed border-border bg-card/50 p-4">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted" style={{ color: meta.hub }}>
+                          <meta.icon className="h-5 w-5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[14px] font-bold">
+                            {p.name} <span className="ml-1 text-[11px] font-normal text-muted-foreground">v{p.version}</span>
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">{p.description}</p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <AvailabilityChips a={p.availability} />
+                            {p.configRequired && <NeedsApiKeyChip />}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="h-8 shrink-0 gap-1 rounded-lg border-0 text-xs text-[#04121E]"
+                          style={{ background: meta.hub }}
+                          onClick={() => {
+                            if (!user) {
+                              toast.error("Sign in first", { description: "Use the demo login from the header." });
+                              return;
+                            }
+                            install.mutate(p.id);
+                          }}
+                          disabled={install.isPending}
+                        >
+                          {install.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Install
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
           )}
         </>
       )}
 
       {/* config dialog */}
       <Dialog open={!!configFor} onOpenChange={(v) => !v && setConfigFor(null)}>
-        <DialogContent className="max-w-sm rounded-2xl border-border bg-card" aria-describedby={undefined}>
+        <DialogContent className={cn("max-w-sm rounded-2xl border-border bg-card", configFor?.configRequired && "border-[#FFBE4A]/40")}>
           <DialogHeader>
             <DialogTitle>Configure {configFor?.name}</DialogTitle>
+            {configFor?.configRequired && (
+              <p className="flex items-start gap-1.5 rounded-lg border border-[#FFBE4A]/30 bg-[#FFBE4A]/10 p-2 text-xs text-[#FFBE4A]">
+                <KeyRound className="mt-0.5 h-3.5 w-3.5 shrink-0" /> This source needs its free API key before searches will return results.
+              </p>
+            )}
             {configFor?.integration && (
               <p className="rounded-lg border border-border bg-background/50 p-2.5 text-[11.5px] leading-relaxed text-muted-foreground">
                 <span className="font-semibold text-foreground/80">How this integration works:</span> {configFor.integration}
@@ -337,27 +456,5 @@ export default function ExtensionsView() {
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function StatusChip({ status, lastError }: { status: string; lastError: string | null }) {
-  if (status === "ACTIVE") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[#3BD47A]/15 px-2 py-0.5 text-[10px] font-bold text-[#3BD47A]">
-        <CheckCircle2 className="h-3 w-3" /> Active
-      </span>
-    );
-  }
-  if (status === "ERROR") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[#EF5B6B]/15 px-2 py-0.5 text-[10px] font-bold text-[#EF5B6B]">
-        <XCircle className="h-3 w-3" /> Error
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
-      <XCircle className="h-3 w-3" /> Disabled
-    </span>
   );
 }

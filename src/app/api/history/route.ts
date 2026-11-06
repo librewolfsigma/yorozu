@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { handle, readJson, ApiError } from "@/lib/api-utils";
 
+// History — snapshot-only audit of the user's own actions. No media FK.
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await getCurrentUser();
@@ -12,15 +13,15 @@ export async function GET(req: NextRequest) {
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
       take: limit,
-      include: { media: { select: { slug: true } } },
     });
     return NextResponse.json({
       entries: rows.map((r) => ({
         id: r.id, action: r.action, category: r.category,
+        provider: r.providerId, externalId: r.externalId,
+        ref: r.providerId && r.externalId ? `${r.providerId}:${r.externalId}` : null,
         detail: r.detail ? JSON.parse(r.detail) : null,
         titleSnapshot: r.titleSnapshot, coverSnapshot: r.coverSnapshot,
         createdAt: r.createdAt,
-        mediaSlug: r.media?.slug ?? null,
       })),
     });
   });
@@ -30,22 +31,22 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await getCurrentUser();
     if (!user) throw new ApiError(401, "Sign in first.");
-    const body = await readJson<{ action?: string; mediaId?: string; category?: string; detail?: Record<string, unknown>; titleSnapshot?: string; coverSnapshot?: string }>(req);
+    const body = await readJson<{
+      action?: string; provider?: string; externalId?: string; category?: string;
+      detail?: Record<string, unknown>; titleSnapshot?: string; coverSnapshot?: string;
+    }>(req);
     if (!body.action) throw new ApiError(400, "action is required");
-    let mediaId = body.mediaId ?? null;
-    let titleSnapshot: string | null | undefined = body.titleSnapshot;
-    let coverSnapshot: string | null | undefined = body.coverSnapshot;
-    let category: string | null | undefined = body.category;
-    if (mediaId) {
-      const media = await db.media.findUnique({ where: { id: mediaId } });
-      if (media) {
-        titleSnapshot = titleSnapshot ?? media.title;
-        coverSnapshot = coverSnapshot ?? media.coverUrl;
-        category = category ?? media.category;
-      }
-    }
     await db.historyEntry.create({
-      data: { userId: user.id, mediaId, action: body.action, category: category ?? "MISC", detail: body.detail ? JSON.stringify(body.detail) : null, titleSnapshot, coverSnapshot },
+      data: {
+        userId: user.id,
+        providerId: body.provider ?? null,
+        externalId: body.externalId ?? null,
+        action: body.action,
+        category: body.category ?? "MISC",
+        detail: body.detail ? JSON.stringify(body.detail) : null,
+        titleSnapshot: body.titleSnapshot ?? null,
+        coverSnapshot: body.coverSnapshot ?? null,
+      },
     });
     return NextResponse.json({ ok: true });
   });

@@ -1,39 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { handle, readJson, ApiError } from "@/lib/api-utils";
-
-async function ownedCollection(userId: string, id: string) {
-  const row = await db.collection.findUnique({ where: { id } });
-  if (!row || row.userId !== userId) throw new ApiError(404, "Collection not found");
-  return row;
-}
-
-export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  return handle(async () => {
-    const user = await getCurrentUser();
-    if (!user) throw new ApiError(401, "Sign in first.");
-    const { id } = await ctx.params;
-    await ownedCollection(user.id, id);
-    const body = await readJson<{ name?: string; description?: string; isPublic?: boolean }>(req);
-    const row = await db.collection.update({
-      where: { id },
-      data: {
-        name: body.name?.slice(0, 60),
-        description: body.description?.slice(0, 300),
-        isPublic: body.isPublic,
-      },
-    });
-    return NextResponse.json({ collection: { id: row.id, name: row.name } });
-  });
-}
+import { handle, ApiError } from "@/lib/api-utils";
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return handle(async () => {
-    const user = await getCurrentUser();
-    if (!user) throw new ApiError(401, "Sign in first.");
     const { id } = await ctx.params;
-    await ownedCollection(user.id, id);
+    const user = await getCurrentUser();
+    if (!user) throw new ApiError(401, "Sign in to manage collections.");
+    const collection = await db.collection.findUnique({ where: { id } });
+    if (!collection || collection.userId !== user.id) throw new ApiError(404, "Collection not found");
     await db.collection.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   });

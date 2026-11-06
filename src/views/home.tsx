@@ -1,23 +1,42 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Play, Info, ChevronRight, Tv, BookOpen, ScrollText, Image as ImageIcon, Video, Gamepad2, Sparkles, Clock, Users, Puzzle, BookMarked } from "lucide-react";
+import {
+  Play, Info, ChevronRight, Sparkles, Clock, Users, Puzzle, AlertTriangle,
+  Compass, BookOpen, Image as ImageIcon, Tv,
+} from "lucide-react";
 import { api } from "@/lib/client-api";
 import { navigate } from "@/hooks/use-hash-route";
 import { useAuth } from "@/components/providers";
 import { MediaRail, MediaGrid, fromDTO, GridSkeleton } from "@/components/media/card";
 import { categoryMeta, CATEGORIES } from "@/lib/category-meta";
-import type { MediaDTO } from "@/lib/serialize";
+import type { WorkDTO } from "@/lib/serialize";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
+interface ContinueItem {
+  provider: string;
+  externalId: string;
+  ref: string;
+  category: string;
+  kind: string; // EPISODE | CHAPTER | GALLERY
+  unitKey: string;
+  unitLabel: string | null;
+  positionSec: number | null;
+  pageIndex: number | null;
+  completed: boolean;
+  titleSnapshot: string;
+  coverSnapshot: string | null;
+  updatedAt: string;
+}
+
 interface HomeData {
-  hero: MediaDTO[];
-  popular: MediaDTO[];
-  categories: Record<string, MediaDTO[]>;
-  continue: { media: MediaDTO; kind: string; completed: boolean; positionSec: number | null; updatedAt: string }[];
-  stats: { media: number; providers: number; chapters: number; episodes: number; galleryImages: number; characters: number };
+  hero: WorkDTO[];
+  popular: WorkDTO[];
+  categories: Record<string, WorkDTO[]>;
+  continue: ContinueItem[];
+  stats: { providers: number; degraded: number; categories: number };
   user: { id: string; username: string } | null;
 }
 
@@ -46,9 +65,8 @@ export default function HomeView() {
   return (
     <div className="space-y-9 pb-6">
       {/* ── Hero ── */}
-      {hero && (
+      {hero && heroMeta && (
         <section className="hero-aurora relative overflow-hidden rounded-2xl border border-border card-ring-lg">
-          { }
           <img
             src={hero.bannerUrl || hero.coverUrl || HERO_IMAGES[heroIdx % HERO_IMAGES.length]}
             alt=""
@@ -58,8 +76,8 @@ export default function HomeView() {
           <div className="relative grid gap-6 p-6 sm:p-9 md:grid-cols-[1.15fr_0.85fr] md:items-center">
             <div>
               <div className="flex items-center gap-2">
-                <span className="rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider" style={{ background: `${heroMeta!.hub}22`, color: heroMeta!.hub }}>
-                  {heroMeta!.label} Spotlight
+                <span className="rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider" style={{ background: `${heroMeta.hub}22`, color: heroMeta.hub }}>
+                  {heroMeta.label} Spotlight
                 </span>
                 <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-foreground/80">18+</span>
               </div>
@@ -67,19 +85,31 @@ export default function HomeView() {
                 {hero.title}
               </h1>
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
-                {hero.year && <span>{hero.year}</span>}
+                {hero.year != null && <span>{hero.year}</span>}
                 {hero.format && <span>· {hero.format}</span>}
                 {hero.status && <span>· {hero.status === "ONGOING" ? "Ongoing" : "Completed"}</span>}
-                {hero.rating > 0 && <span className="font-semibold" style={{ color: heroMeta!.hub }}>★ {hero.rating.toFixed(1)}</span>}
+                {hero.rating != null && hero.rating > 0 && (
+                  <span className="font-semibold" style={{ color: heroMeta.hub }}>★ {hero.rating.toFixed(1)}</span>
+                )}
+                <span>· via {hero.providerName}</span>
               </div>
               <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-foreground/80 line-clamp-3">
                 {hero.description}
               </p>
               <div className="mt-5 flex flex-wrap items-center gap-3">
-                <Button size="lg" className="h-12 rounded-2xl cta-gradient border-0 px-7 text-[15px] font-bold" onClick={() => navigate(`/media/${hero.slug}`)}>
-                  <Play className="mr-1.5 h-4.5 w-4.5 fill-current" /> {heroMeta!.action}
+                <Button
+                  size="lg"
+                  className="h-12 rounded-2xl cta-gradient border-0 px-7 text-[15px] font-bold"
+                  onClick={() => navigate(`/media?p=${encodeURIComponent(hero.provider)}&id=${encodeURIComponent(hero.externalId)}`)}
+                >
+                  <Play className="mr-1.5 h-4.5 w-4.5 fill-current" /> {heroMeta.action}
                 </Button>
-                <Button size="lg" variant="ghost" className="h-12 rounded-2xl border border-white/15 bg-white/10 px-5 text-[15px] font-semibold text-white hover:bg-white/15" onClick={() => navigate(`/media/${hero.slug}`)}>
+                <Button
+                  size="lg"
+                  variant="ghost"
+                  className="h-12 rounded-2xl border border-white/15 bg-white/10 px-5 text-[15px] font-semibold text-white hover:bg-white/15"
+                  onClick={() => navigate(`/media?p=${encodeURIComponent(hero.provider)}&id=${encodeURIComponent(hero.externalId)}`)}
+                >
                   <Info className="mr-1.5 h-4.5 w-4.5" /> Details
                 </Button>
               </div>
@@ -89,7 +119,7 @@ export default function HomeView() {
             <div className="relative hidden h-[260px] md:block" aria-hidden>
               {data.hero.slice(0, 5).map((m, i) => (
                 <button
-                  key={m.id}
+                  key={m.ref}
                   onClick={() => setHeroIdx(i)}
                   className={cn(
                     "absolute bottom-0 w-[150px] overflow-hidden rounded-xl card-ring transition-all duration-500 hover:z-20 hover:-translate-y-3",
@@ -101,7 +131,6 @@ export default function HomeView() {
                     zIndex: i === heroIdx % data.hero.length ? 10 : 5 - Math.abs(i - 2),
                   }}
                 >
-                  { }
                   <img src={m.coverUrl ?? ""} alt="" className="aspect-[2/3] w-full object-cover" />
                 </button>
               ))}
@@ -112,8 +141,12 @@ export default function HomeView() {
 
       {/* ── Continue ── */}
       {user && data.continue.length > 0 && (
-        <Section title="Continue where you left off" icon={<Clock className="h-4.5 w-4.5" />} href="/library">
-          <MediaRail items={data.continue.map((c) => fromDTO(c.media))} />
+        <Section title="Continue where you left off" icon={<Clock className="h-4.5 w-4.5" />} href="/history">
+          <div className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1 snap-x">
+            {data.continue.map((c) => (
+              <ContinueCard key={c.ref} item={c} />
+            ))}
+          </div>
         </Section>
       )}
 
@@ -138,7 +171,7 @@ export default function HomeView() {
               <span className="min-w-0">
                 <span className="block truncate text-[13.5px] font-bold">{c.label}</span>
                 <span className="block text-[11px] text-muted-foreground">
-                  {data.categories[c.key]?.length ?? 0}+ titles
+                  {data.categories[c.key]?.length ?? 0} live
                 </span>
               </span>
               <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
@@ -147,28 +180,85 @@ export default function HomeView() {
         </div>
       </section>
 
-      {/* ── Popular all-time grid ── */}
+      {/* ── Popular grid ── */}
       <Section title="Popular right now" icon={<Users className="h-4.5 w-4.5" />} href="/browse/ANIME">
-        <MediaGrid items={data.popular.slice(0, 12)} />
+        <MediaGrid items={data.popular.slice(0, 12).map(fromDTO)} />
       </Section>
 
-      {/* ── Stats strip ── */}
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {/* ── Stats strip (provider health — Yozora stores no catalog) ── */}
+      <section className="grid grid-cols-3 gap-3">
         {[
-          { label: "Titles", value: data.stats.media, icon: BookOpen },
-          { label: "Providers", value: data.stats.providers, icon: Puzzle },
-          { label: "Chapters", value: data.stats.chapters, icon: BookMarked },
-          { label: "Episodes", value: data.stats.episodes, icon: Tv },
-          { label: "Gallery images", value: data.stats.galleryImages, icon: ImageIcon },
-          { label: "Characters", value: data.stats.characters, icon: ScrollText },
+          { label: "Providers installed", value: data.stats.providers, icon: Puzzle },
+          { label: "Providers degraded", value: data.stats.degraded, icon: AlertTriangle, warn: data.stats.degraded > 0 },
+          { label: "Live categories", value: data.stats.categories, icon: Compass },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border border-border bg-card p-4 text-center">
-            <s.icon className="mx-auto h-4.5 w-4.5 text-muted-foreground" />
+            <s.icon className={cn("mx-auto h-4.5 w-4.5", s.warn ? "text-[#EF5B6B]" : "text-muted-foreground")} />
             <p className="mt-1.5 font-display text-2xl text-white">{s.value}</p>
             <p className="text-[11px] text-muted-foreground">{s.label}</p>
           </div>
         ))}
       </section>
+    </div>
+  );
+}
+
+/** Resume card: deep-links straight back into the exact episode/chapter/gallery. */
+function ContinueCard({ item }: { item: ContinueItem }) {
+  const meta = categoryMeta(item.category);
+  const p = encodeURIComponent(item.provider);
+  const id = encodeURIComponent(item.externalId);
+  const href =
+    item.kind === "EPISODE"
+      ? `/watch?p=${p}&id=${id}&ep=${encodeURIComponent(item.unitKey)}`
+      : item.kind === "CHAPTER"
+        ? `/read?p=${p}&id=${id}&ch=${encodeURIComponent(item.unitKey)}`
+        : `/gallery?p=${p}&id=${id}`;
+  const KindIcon = item.kind === "EPISODE" ? Tv : item.kind === "CHAPTER" ? BookOpen : ImageIcon;
+  const kindLabel =
+    item.kind === "EPISODE" ? "Episode" : item.kind === "CHAPTER" ? "Chapter" : "Gallery";
+
+  return (
+    <div
+      className="poster-card group w-[150px] shrink-0 cursor-pointer select-none snap-start"
+      onClick={() => navigate(href)}
+      role="link"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && navigate(href)}
+      aria-label={`Resume ${item.titleSnapshot}${item.unitLabel ? ` — ${item.unitLabel}` : ""}`}
+    >
+      <div
+        className="relative aspect-[2/3] overflow-hidden rounded-xl card-ring bg-[#141B30]"
+        style={{ ["--hub" as string]: meta.hub }}
+      >
+        {item.coverSnapshot ? (
+          <img
+            src={item.coverSnapshot}
+            alt={`${item.titleSnapshot} cover`}
+            loading="lazy"
+            className="poster-img h-full w-full object-cover"
+          />
+        ) : (
+          <div className="h-full w-full bg-muted" />
+        )}
+        <div className="absolute inset-0 z-[5] flex items-center justify-center bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full" style={{ background: meta.hub, color: "#04121E" }}>
+            <Play className="h-5 w-5 fill-current" />
+          </div>
+        </div>
+        <div className="absolute left-1.5 top-1.5 z-10 inline-flex items-center gap-1 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
+          <KindIcon className="h-3 w-3" /> {item.unitLabel ?? kindLabel}
+        </div>
+      </div>
+      <div className="mt-2 px-0.5">
+        <p className="line-clamp-1 text-[13px] font-semibold text-foreground/90 group-hover:text-white transition-colors">
+          {item.titleSnapshot}
+        </p>
+        <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span style={{ color: meta.hub }} className="font-semibold">{kindLabel}</span>
+          {item.unitLabel && <span>· {item.unitLabel}</span>}
+        </p>
+      </div>
     </div>
   );
 }
@@ -192,7 +282,7 @@ function Section({ title, icon, href, children }: { title: string; icon?: React.
   );
 }
 
-function CategoryTabs({ categories }: { categories: Record<string, MediaDTO[]> }) {
+function CategoryTabs({ categories }: { categories: Record<string, WorkDTO[]> }) {
   const keys = Object.keys(categories).filter((k) => categories[k]?.length);
   const [active, setActive] = useState(keys[0] ?? "ANIME");
   const meta = categoryMeta(active);
@@ -218,9 +308,13 @@ function CategoryTabs({ categories }: { categories: Record<string, MediaDTO[]> }
           );
         })}
       </div>
-      <div style={{ ["--hub" as string]: meta.hub }}>
-        <MediaRail items={(categories[active] ?? []).map(fromDTO)} showRank />
-      </div>
+      {keys.includes(active) ? (
+        <div style={{ ["--hub" as string]: meta.hub }}>
+          <MediaRail items={(categories[active] ?? []).map(fromDTO)} showRank />
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">No live titles in this category right now.</p>
+      )}
     </div>
   );
 }

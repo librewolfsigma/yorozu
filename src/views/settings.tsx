@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Settings, LogIn, UserPlus, LogOut, Loader2, MoonStar, ShieldCheck, HardDrive, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/providers";
 import { post } from "@/lib/client-api";
@@ -15,6 +15,31 @@ import { toast } from "sonner";
 import { api, del } from "@/lib/client-api";
 import { CATEGORIES } from "@/lib/category-meta";
 
+// Client-side preference persistence: reader/category prefs live on this
+// device only (localStorage) — there is no server settings endpoint to invent.
+const PREFS_KEY = "yozora_settings";
+interface Prefs {
+  readerMode?: string;
+  hideCategories?: string[];
+}
+
+function readPrefs(): Prefs {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    return raw ? (JSON.parse(raw) as Prefs) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writePrefs(next: Prefs) {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...readPrefs(), ...next }));
+  } catch {
+    // storage unavailable — prefs stay in-memory for this session
+  }
+}
+
 export default function SettingsView() {
   const { user, login, register, demoLogin, logout } = useAuth();
   const qc = useQueryClient();
@@ -27,6 +52,26 @@ export default function SettingsView() {
 
   const [hideCategories, setHideCategories] = useState<string[]>([]);
   const [defaultReaderMode, setDefaultReaderMode] = useState("webtoon");
+
+  // hydrate device-local preferences once on mount
+  useEffect(() => {
+    const prefs = readPrefs();
+    if (prefs.readerMode) setDefaultReaderMode(prefs.readerMode);
+    if (Array.isArray(prefs.hideCategories)) setHideCategories(prefs.hideCategories);
+  }, []);
+
+  const chooseReaderMode = (key: string) => {
+    setDefaultReaderMode(key);
+    writePrefs({ readerMode: key });
+  };
+
+  const toggleCategory = (key: string, visible: boolean) => {
+    const next = visible
+      ? hideCategories.filter((k) => k !== key)
+      : [...hideCategories, key];
+    setHideCategories(next);
+    writePrefs({ hideCategories: next });
+  };
 
   const doLogin = async () => {
     setBusy(true);
@@ -78,7 +123,6 @@ export default function SettingsView() {
             <div className="rounded-xl border border-border bg-card p-5">
               <div className="flex items-center gap-4">
                 {user.avatarUrl && (
-                   
                   <img src={user.avatarUrl} alt="" className="h-14 w-14 rounded-xl" />
                 )}
                 <div>
@@ -106,7 +150,7 @@ export default function SettingsView() {
           <TabsContent value="content" className="mt-5 space-y-4">
             <div className="rounded-xl border border-border bg-card p-5">
               <p className="text-[14px] font-bold">Default reader mode</p>
-              <p className="mt-1 text-[13px] text-muted-foreground">Applied when opening manga & manhwa chapters.</p>
+              <p className="mt-1 text-[13px] text-muted-foreground">Applied when opening manga & manhwa chapters (stored on this device).</p>
               <div className="mt-3 flex gap-2">
                 {[
                   { key: "paged", label: "Paged" },
@@ -114,7 +158,8 @@ export default function SettingsView() {
                 ].map((m) => (
                   <button
                     key={m.key}
-                    onClick={() => setDefaultReaderMode(m.key)}
+                    onClick={() => chooseReaderMode(m.key)}
+                    aria-pressed={defaultReaderMode === m.key}
                     className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
                       defaultReaderMode === m.key
                         ? "border-[#3DB4F2] bg-[#3DB4F2]/15 text-[#3DB4F2]"
@@ -128,7 +173,7 @@ export default function SettingsView() {
             </div>
             <div className="rounded-xl border border-border bg-card p-5">
               <p className="text-[14px] font-bold">Category visibility</p>
-              <p className="mt-1 text-[13px] text-muted-foreground">Hide categories you&apos;re not interested in from future views (stored locally in this demo).</p>
+              <p className="mt-1 text-[13px] text-muted-foreground">Hide categories you&apos;re not interested in (stored locally on this device).</p>
               <div className="mt-3 space-y-2">
                 {CATEGORIES.map((c) => (
                   <label key={c.key} className="flex items-center justify-between rounded-lg border border-border px-3.5 py-2.5">
@@ -137,9 +182,7 @@ export default function SettingsView() {
                     </span>
                     <Switch
                       checked={!hideCategories.includes(c.key)}
-                      onCheckedChange={(v) =>
-                        setHideCategories((prev) => (v ? prev.filter((k) => k !== c.key) : [...prev, c.key]))
-                      }
+                      onCheckedChange={(v) => toggleCategory(c.key, v)}
                       aria-label={`Show ${c.label}`}
                     />
                   </label>
@@ -152,14 +195,17 @@ export default function SettingsView() {
             <div className="rounded-xl border border-border bg-card p-5">
               <p className="flex items-center gap-2 text-[14px] font-bold"><HardDrive className="h-4 w-4" /> Local data</p>
               <p className="mt-1 text-[13px] text-muted-foreground">
-                Clear locally cached queries and stored preferences. Server-side library data is untouched.
+                Clear locally cached queries and stored preferences. Your library, progress and collections are untouched.
               </p>
               <Button
                 variant="outline"
                 className="mt-3 gap-1.5 rounded-lg border-border"
                 onClick={() => {
                   localStorage.removeItem("yozora_age");
+                  localStorage.removeItem(PREFS_KEY);
                   qc.clear();
+                  setDefaultReaderMode("webtoon");
+                  setHideCategories([]);
                   toast.success("Local data cleared");
                 }}
               >
@@ -167,7 +213,7 @@ export default function SettingsView() {
               </Button>
             </div>
             <p className="text-center text-xs text-muted-foreground">
-              Yozora demo · no analytics, no third-party trackers, all data stored locally in SQLite.
+              Yozora is a client, not a database — only your own tracking data is stored, locally in SQLite.
             </p>
           </TabsContent>
         </Tabs>
@@ -177,7 +223,7 @@ export default function SettingsView() {
           <div className="mb-5 rounded-xl border border-[#3DB4F2]/25 bg-[#3DB4F2]/10 p-4 text-center">
             <MoonStar className="mx-auto h-7 w-7 text-[#3DB4F2]" />
             <p className="mt-2 font-bold">Sign in to sync everything</p>
-            <p className="mt-1 text-[13px] text-muted-foreground">Library, progress, collections, downloads and reviews.</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">Library, progress, collections and reviews.</p>
             <Button className="mt-3 w-full rounded-xl border-0 text-[#04121E]" style={{ background: "#3DB4F2" }} onClick={() => void demoLogin().then(() => toast.success("Signed in as demo reader"))}>
               Continue as demo reader
             </Button>

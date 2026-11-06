@@ -1,67 +1,85 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+// Cinema view — plays one episode resolved live from /api/work.
+// If the provider serves no stream, this view says so and links out —
+// it never renders a fake player (docs/CLIENT_ARCHITECTURE.md §5).
+
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize2, Loader2,
-  AlertTriangle, ChevronLeft, ChevronRight, ShieldCheck,
+  ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize2,
+  AlertTriangle, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { api, post } from "@/lib/client-api";
 import { navigate } from "@/hooks/use-hash-route";
 import { useAuth } from "@/components/providers";
 import { categoryMeta, fmtDuration } from "@/lib/category-meta";
+import { ProviderChips } from "@/components/media/actions";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import type { WorkDTO } from "@/lib/serialize";
 
-interface EpisodePayload {
-  id: string;
-  media: { id: string; slug: string; title: string; category: string; accent: string | null };
-  number: number;
-  title: string | null;
-  durationSec: number | null;
-  streamUrl: string | null;
-  streamType: string | null;
-  summary: string | null;
-  siblings: { id: string; number: number; title: string | null }[];
+interface EpisodeUnit {
+  key: string; number: number; title: string | null; thumbnailUrl: string | null;
+  durationSec: number | null; streamUrl: string | null; streamType: string | null; summary: string | null;
+}
+interface ProviderInfo {
+  id: string; name: string; status: string;
+  configRequired?: boolean;
+  availability?: { watch: boolean; read: boolean; view: boolean };
+}
+interface WorkDetail {
+  work: WorkDTO;
+  units: { episodes: EpisodeUnit[]; chapters: { key: string }[]; images: { url: string }[] };
+  provider: ProviderInfo;
+  ref: string;
 }
 
-export default function WatchView({ slug, episodeId }: { slug?: string; episodeId?: string }) {
-  const { user, demoLogin } = useAuth();
-  const qc = useQueryClient();
+/** Fire-and-forget progress POST — silently ignored when signed out (401). */
+export function reportProgress(payload: Record<string, unknown>): void {
+  void post("/api/progress", payload).catch(() => {
+    /* signed-out or offline — progress is best-effort, never noisy */
+  });
+}
+
+export default function WatchView({ provider, id, episodeKey }: { provider?: string | null; id?: string | null; episodeKey?: string | null }) {
+  const { user } = useAuth();
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const lastSyncRef = useRef(0);
 
-  const { data: ep, isLoading, isError } = useQuery({
-    queryKey: ["episode", episodeId],
-    queryFn: () => api<EpisodePayload>(`/api/episodes/${episodeId}`),
-    enabled: !!episodeId,
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["work", provider, id],
+    queryFn: () => api<WorkDetail>(`/api/work?p=${encodeURIComponent(provider!)}&id=${encodeURIComponent(id!)}`),
+    enabled: !!provider && !!id,
   });
 
-  const { data: detail } = useQuery({
-    queryKey: ["media", slug],
-    queryFn: () => api<{ media: { id: string; slug: string; title: string; category: string; accent: string | null }; episodes: { id: string; number: number }[]; library: { status: string; progress: number } | null }>(`/api/media/${slug}`),
-    enabled: !!slug,
-  });
+  const work = data?.work ?? null;
+  const episodes = data?.units.episodes ?? [];
+  const ep = episodes.find((e) => e.key === episodeKey) ?? episodes[0] ?? null;
+  const meta = work ? categoryMeta(work.category) : categoryMeta("ANIME");
+  const hub = work?.accent || meta.hub;
+  const isAV = work?.category === "AV";
+  const backHref = provider && id ? `/media?p=${encodeURIComponent(provider)}&id=${encodeURIComponent(id)}` : "/";
 
-  const meta = ep ? categoryMeta(ep.media.category) : categoryMeta("ANIME");
-  const hub = ep?.media.accent ?? meta.hub;
+  // position/duration/playing self-correct as the new <video> (keyed by ep.key)
+  // fires onLoadedMetadata / onTimeUpdate / onPlay — no reset effect needed.
 
-  const sync = useMutation({
-    mutationFn: (payload: { positionSec: number; completed: boolean }) =>
-      post("/api/progress", {
-        mediaId: ep?.media.id,
-        itemId: ep?.id,
-        kind: "EPISODE",
-        positionSec: Math.floor(payload.positionSec),
-        completed: payload.completed,
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["media", slug] }),
-  });
+  const syncNow = useCallback(
+    (positionSec: number, completed = false) => {
+      if (!user || !work || !ep) return;
+      reportProgress({
+        provider: work.provider, externalId: work.externalId, category: work.category,
+        title: work.title, cover: work.coverUrl ?? undefined,
+        kind: "EPISODE", unitKey: ep.key, unitLabel: isAV ? `Scene ${ep.number}` : `Episode ${ep.number}`,
+        positionSec: Math.floor(positionSec), completed,
+      });
+    },
+    [user, work, ep, isAV]
+  );
 
   // periodic progress sync every 10s while playing
   useEffect(() => {
@@ -69,21 +87,27 @@ export default function WatchView({ slug, episodeId }: { slug?: string; episodeI
     const t = setInterval(() => {
       const v = videoRef.current;
       if (v && !v.paused && v.duration > 0) {
-        sync.mutate({ positionSec: v.currentTime, completed: v.currentTime / v.duration > 0.9 });
+        syncNow(v.currentTime, v.currentTime / v.duration > 0.9);
       }
     }, 10_000);
     return () => clearInterval(t);
-  }, [user, ep]);
+  }, [user, ep, syncNow]);
 
-  // on unmount / episode change, save final position
+  // latest sync function without re-arming the save-on-unmount effect
+  const syncNowRef = useRef(syncNow);
+  useEffect(() => {
+    syncNowRef.current = syncNow;
+  }, [syncNow]);
+
+  // on unmount / episode change, save the final position (captures THIS episode's
+  // video element + unit, so the position lands on the right unitKey)
   useEffect(() => {
     const v = videoRef.current;
+    const epAtMount = ep;
+    const signedIn = !!user;
     return () => {
-      if (user && ep && v && v.duration > 0) {
-        void post("/api/progress", {
-          mediaId: ep.media.id, itemId: ep.id, kind: "EPISODE",
-          positionSec: Math.floor(v.currentTime), completed: v.currentTime / v.duration > 0.9,
-        }).catch(() => {});
+      if (signedIn && epAtMount && v && v.duration > 0) {
+        syncNowRef.current(v.currentTime, v.currentTime / v.duration > 0.9);
       }
     };
   }, [user, ep]);
@@ -95,23 +119,48 @@ export default function WatchView({ slug, episodeId }: { slug?: string; episodeI
     else v.pause();
   }, []);
 
-  const idx = ep ? ep.siblings.findIndex((s) => s.id === ep.id) : -1;
-  const prevEp = idx > 0 ? ep!.siblings[idx - 1] : null;
-  const nextEp = ep && idx >= 0 && idx < ep.siblings.length - 1 ? ep.siblings[idx + 1] : null;
+  const enc = encodeURIComponent;
+  const watchHref = (key: string) => `/watch?p=${enc(provider!)}&id=${enc(id!)}&ep=${enc(key)}`;
+  const idx = ep ? episodes.findIndex((e) => e.key === ep.key) : -1;
+  const prevEp = idx > 0 ? episodes[idx - 1] : null;
+  const nextEp = ep && idx >= 0 && idx < episodes.length - 1 ? episodes[idx + 1] : null;
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#080f19]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#FF6F91]" />
+      <div className="fixed inset-0 z-[60] flex flex-col gap-4 bg-[#080f19] p-4">
+        <div className="yz-skeleton h-10 rounded-xl" />
+        <div className="yz-skeleton flex-1 rounded-2xl" />
       </div>
     );
   }
-  if (isError || !ep) {
+  if (isError || !data || !work) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#080f19]">
+      <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-[#080f19]">
         <AlertTriangle className="h-8 w-8 text-[#EF5B6B]" />
-        <p className="font-semibold">Episode not found</p>
-        <Button variant="outline" onClick={() => navigate(`/media/${slug}`)}>Back to details</Button>
+        <p className="font-semibold">Could not open this episode</p>
+        <p className="max-w-md text-center text-sm text-muted-foreground">{(error as Error)?.message ?? "The provider may be unreachable right now."}</p>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => void refetch()}>Retry</Button>
+          <Button variant="ghost" onClick={() => navigate(backHref)}>Back to details</Button>
+        </div>
+      </div>
+    );
+  }
+  if (!ep) {
+    return (
+      <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-[#080f19] px-4">
+        <AlertTriangle className="h-8 w-8 text-[#FFBE4A]" />
+        <p className="font-semibold">This source exposes no playable episodes</p>
+        {work.externalLinks.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-2">
+            {work.externalLinks.map((l) => (
+              <a key={l.url} href={l.url} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-[13px] font-bold" style={{ borderColor: `${hub}44`, background: `${hub}14`, color: hub }}>
+                <ArrowLeft className="hidden h-3.5 w-3.5" /> {l.label}
+              </a>
+            ))}
+          </div>
+        )}
+        <Button variant="ghost" onClick={() => navigate(backHref)}>← Back to details</Button>
       </div>
     );
   }
@@ -122,17 +171,17 @@ export default function WatchView({ slug, episodeId }: { slug?: string; episodeI
     <div className="fixed inset-0 z-[60] flex flex-col bg-[#080f19]" style={{ ["--hub" as string]: hub }}>
       {/* top bar */}
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-[#0B1622]/95 px-3 backdrop-blur">
-        <Button variant="ghost" size="sm" className="gap-1.5 rounded-lg text-muted-foreground" onClick={() => navigate(`/media/${slug}`)}>
-          <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">{ep.media.title}</span>
+        <Button variant="ghost" size="sm" className="gap-1.5 rounded-lg text-muted-foreground" onClick={() => navigate(backHref)}>
+          <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">{work.title}</span>
         </Button>
         <div className="min-w-0 flex-1 text-center">
           <p className="truncate text-[13px] font-bold text-white">
-            {ep.media.category === "AV" ? "Scene" : "Episode"} {ep.number} — {ep.title}
+            {isAV ? "Scene" : "Episode"} {ep.number} — {ep.title ?? (isAV ? "Scene" : "Episode")}
           </p>
-          <p className="text-[11px] text-muted-foreground">{fmtDuration(ep.durationSec)}</p>
+          <p className="text-[11px] text-muted-foreground">{fmtDuration(ep.durationSec)} · via {work.providerName}</p>
         </div>
-        <span className="hidden rounded-full bg-[#3BD47A]/15 px-2.5 py-1 text-[10px] font-bold text-[#3BD47A] sm:inline-flex sm:items-center sm:gap-1">
-          <ShieldCheck className="h-3 w-3" /> Verified 18+ performers
+        <span className="hidden rounded-full bg-card px-2.5 py-1 text-[10px] font-bold text-muted-foreground sm:inline-flex sm:items-center">
+          {work.providerName}
         </span>
       </header>
 
@@ -142,37 +191,51 @@ export default function WatchView({ slug, episodeId }: { slug?: string; episodeI
           <div className="flex flex-1 items-center justify-center bg-black p-0 lg:p-6">
             {hasStream ? (
               <video
+                key={ep.key}
                 ref={videoRef}
                 src={ep.streamUrl!}
                 controls
                 autoPlay
                 muted={muted}
                 playsInline
-                className="max-h-full max-w-full"
+                poster={ep.thumbnailUrl ?? work.coverUrl ?? undefined}
+                className="w-full"
+                style={{ maxHeight: "70vh" }}
                 onPlay={() => setPlaying(true)}
                 onPause={() => setPlaying(false)}
                 onTimeUpdate={(e) => setPosition(e.currentTarget.currentTime)}
                 onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                onEnded={() => user && sync.mutate({ positionSec: duration, completed: true })}
+                onEnded={() => syncNow(duration || ep.durationSec || 0, true)}
               />
             ) : (
-              <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-6 text-center m-6">
+              /* honest panel — never a fake player */
+              <div className="mx-auto m-6 max-w-md rounded-2xl border border-border bg-card p-6 text-center">
                 <AlertTriangle className="mx-auto h-9 w-9 text-[#FFBE4A]" />
-                <p className="mt-3 font-bold">No authorized stream available</p>
+                <p className="mt-3 font-bold">No in-app stream for this source</p>
                 <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-                  The installed providers for this title don&apos;t include a licensed stream in this
-                  demo environment. Yozora never circumvents provider access controls, DRM or
-                  regional restrictions — when a provider grants streams, they play right here.
+                  {work.providerName} does not serve a stream that Yozora can play. Yozora never circumvents
+                  provider access controls, DRM or regional restrictions — when a provider grants streams,
+                  they play right here.
                 </p>
-                <div className="mt-4 rounded-lg bg-muted/60 p-3 text-left text-xs text-muted-foreground">
-                  <p className="font-semibold text-foreground/80">Provider status:</p>
-                  <p className="mt-1">Adapter OK · stream manifest intentionally empty (demo licensing)</p>
-                </div>
-                {!user && (
-                  <Button className="mt-4 rounded-xl border-0 text-[#04121E]" style={{ background: hub }} onClick={() => void demoLogin()}>
-                    Sign in as demo
-                  </Button>
+                {work.externalLinks.length > 0 && (
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    {work.externalLinks.map((l) => (
+                      <a
+                        key={l.url}
+                        href={l.url}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow"
+                        className="inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-[13px] font-bold"
+                        style={{ borderColor: `${hub}44`, background: `${hub}14`, color: hub }}
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" /> {l.label}
+                      </a>
+                    ))}
+                  </div>
                 )}
+                <div className="mt-4">
+                  <ProviderChips provider={{ ...data.provider, externalUrl: work.externalUrl }} />
+                </div>
               </div>
             )}
           </div>
@@ -208,12 +271,12 @@ export default function WatchView({ slug, episodeId }: { slug?: string; episodeI
             <div className="mt-3 flex items-center justify-between">
               <div className="flex gap-2">
                 {prevEp && (
-                  <Button variant="outline" size="sm" className="gap-1 rounded-lg border-border" onClick={() => navigate(`/watch/${slug}/${prevEp.id}`)}>
-                    <ChevronLeft className="h-3.5 w-3.5" /> Scene {prevEp.number}
+                  <Button variant="outline" size="sm" className="gap-1 rounded-lg border-border" onClick={() => navigate(watchHref(prevEp.key))}>
+                    <ChevronLeft className="h-3.5 w-3.5" /> {isAV ? "Scene" : "Ep."} {prevEp.number}
                   </Button>
                 )}
                 {nextEp && (
-                  <Button size="sm" className="gap-1 rounded-lg border-0 text-[#04121E]" style={{ background: hub }} onClick={() => navigate(`/watch/${slug}/${nextEp.id}`)}>
+                  <Button size="sm" className="gap-1 rounded-lg border-0 text-[#04121E]" style={{ background: hub }} onClick={() => navigate(watchHref(nextEp.key))}>
                     Next <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 )}
@@ -221,7 +284,7 @@ export default function WatchView({ slug, episodeId }: { slug?: string; episodeI
               {user && (
                 <button
                   className="text-xs font-semibold text-muted-foreground hover:text-foreground"
-                  onClick={() => void sync.mutateAsync({ positionSec: Math.floor(position), completed: true }).then(() => toast.success("Marked as watched"))}
+                  onClick={() => { syncNow(position, true); toast.success("Marked as watched"); }}
                 >
                   Mark as watched
                 </button>
@@ -233,21 +296,22 @@ export default function WatchView({ slug, episodeId }: { slug?: string; episodeI
         {/* episode sidebar */}
         <aside className={cn("w-full shrink-0 border-t border-border/70 bg-[#0B1622]/60 lg:w-80 lg:border-l lg:border-t-0", "max-h-72 overflow-y-auto lg:max-h-none")}>
           <p className="sticky top-0 bg-[#0B1622]/95 px-4 py-3 text-xs font-bold uppercase tracking-wide text-muted-foreground backdrop-blur">
-            All {ep.media.category === "AV" ? "scenes" : "episodes"} ({ep.siblings.length})
+            All {isAV ? "scenes" : "episodes"} ({episodes.length})
           </p>
           <div className="space-y-1 px-2 pb-4">
-            {ep.siblings.map((s) => (
+            {episodes.map((e) => (
               <button
-                key={s.id}
-                onClick={() => navigate(`/watch/${slug}/${s.id}`)}
+                key={e.key}
+                onClick={() => navigate(watchHref(e.key))}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[13px] transition-colors",
-                  s.id === ep.id ? "hub-soft font-bold" : "hover:bg-white/5"
+                  e.key === ep.key ? "hub-soft font-bold" : "hover:bg-white/5"
                 )}
               >
-                <span className="w-8 shrink-0 text-center text-xs font-bold" style={{ color: hub }}>{s.number}</span>
-                <span className="min-w-0 flex-1 truncate">{s.title}</span>
-                {s.id === ep.id && <Play className="h-3.5 w-3.5 shrink-0" style={{ color: hub }} />}
+                <span className="w-8 shrink-0 text-center text-xs font-bold" style={{ color: hub }}>{e.number}</span>
+                <span className="min-w-0 flex-1 truncate">{e.title ?? (isAV ? "Scene" : "Episode")}</span>
+                {!e.streamUrl && <span className="shrink-0 text-[9px] font-bold uppercase text-muted-foreground">ext</span>}
+                {e.key === ep.key && <Play className="h-3.5 w-3.5 shrink-0" style={{ color: hub }} />}
               </button>
             ))}
           </div>

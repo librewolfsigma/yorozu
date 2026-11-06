@@ -2,39 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { handle, readJson, ApiError } from "@/lib/api-utils";
-import { serializeCatalogItem } from "@/lib/serialize";
+import { cached, TTL } from "@/lib/cache";
 import { discoverCategory } from "@/lib/providers/engine";
+import type { WorkDTO } from "@/lib/serialize";
 
-// Userscript/tool catalog + per-user installs.
-// Entries come LIVE from the Wotaku directory provider (real names, real
-// URLs). The platform tracks installs and permissions but NEVER executes
-// third-party code.
+// Userscript/tool catalog — fetched LIVE from the Wotaku directory provider
+// on every request (TTL-cached in memory, never persisted). The platform
+// tracks only the user's install decisions and NEVER executes third-party code.
 export async function GET() {
   return handle(async () => {
     const user = await getCurrentUser();
-    // hydrate from the live provider when the local cache is empty
-    let count = await db.catalogItem.count({ where: { category: "SCRIPT" } });
-    if (count === 0) {
-      await discoverCategory("SCRIPT").catch(() => null);
-      count = await db.catalogItem.count({ where: { category: "SCRIPT" } });
-    }
-    const scripts = await db.catalogItem.findMany({
-      where: { category: "SCRIPT" },
-      include: { provider: { select: { id: true, name: true, installed: true, status: true } } },
-      orderBy: { popularity: "desc" },
-      take: 60,
-    });
-    const installs = user
-      ? await db.scriptInstall.findMany({ where: { userId: user.id } })
-      : [];
+    const discovery = await cached("scripts", "wotaku-scripts", TTL.LISTINGS, () => discoverCategory("SCRIPT")).catch(() => null);
+    const items: WorkDTO[] = discovery?.rails.flatMap((r) => r.items) ?? [];
+    const installs = user ? await db.scriptInstall.findMany({ where: { userId: user.id } }) : [];
     return NextResponse.json({
-      scripts: scripts.map((s) => ({
-        ...serializeCatalogItem(s),
-        provider: { id: s.provider.id, name: s.provider.name, installed: s.provider.installed, status: s.provider.status },
-        install: installs.find((i) => i.scriptId === s.id)
-          ? { enabled: installs.find((i) => i.scriptId === s.id)!.enabled, installedAt: installs.find((i) => i.scriptId === s.id)!.installedAt }
-          : null,
-      })),
+      scripts: items.map((s) => {
+        const install = installs.find((i) => i.providerId === s.provider && i.externalId === s.externalId);
+        return {
+          ...s,
+          install: install ? { enabled: install.enabled, installedAt: install.installedAt } : null,
+        };
+      }),
     });
   });
 }
@@ -43,40 +31,36 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await getCurrentUser();
     if (!user) throw new ApiError(401, "Sign in to manage scripts.");
-    const body = await readJson<{ scriptId?: string; action?: string }>(req);
-    if (!body.scriptId || !body.action) throw new ApiError(400, "scriptId and action required");
-    const script = await db.catalogItem.findUnique({ where: { id: body.scriptId }, include: { provider: true } });
-    if (!script || script.category !== "SCRIPT") throw new ApiError(404, "Script not found");
+    const body = await readJson<{ provider?: string; externalId?: string; title?: string; action?: string }>(req);
+    if (!body.provider || !body.externalId || !body.action) {
+      throw new ApiError(400, "provider, externalId and action are required");
+    }
+    const refWhere = { userId: user.id, providerId: body.provider, externalId: body.externalId };
+    const where = { userId_providerId_externalId: refWhere };
 
     if (body.action === "install") {
-      if (!script.provider.installed) throw new ApiError(409, "Install the ScriptForge provider first.");
-      const extra = JSON.parse(script.extra) as { permissions?: { domain: string }[] };
-      const existing = await db.scriptInstall.findUnique({
-        where: { userId_scriptId: { userId: user.id, scriptId: script.id } },
-      });
+      const existing = await db.scriptInstall.findUnique({ where });
       if (!existing) {
         await db.scriptInstall.create({
           data: {
-            userId: user.id, scriptId: script.id,
-            grantedPermissions: JSON.stringify((extra.permissions ?? []).map((p) => p.domain)),
+            userId: user.id, providerId: body.provider, externalId: body.externalId,
+            titleSnapshot: body.title ?? `Script ${body.externalId}`,
           },
         });
         await db.notification.create({
-          data: { userId: user.id, type: "SUCCESS", title: `Installed ${script.title}`, body: "Sandboxed: the script is metadata-only and is never executed by the platform.", link: "#/scripts" },
-        });
+          data: { userId: user.id, type: "SUCCESS", title: `Tracked ${body.title ?? "script"}`, body: "Bookmark only — Yozora never executes third-party code; scripts run in your own userscript manager.", link: "#/scripts" },
+        }).catch(() => null);
       }
       return NextResponse.json({ ok: true });
     }
 
     if (body.action === "uninstall") {
-      await db.scriptInstall.deleteMany({ where: { userId: user.id, scriptId: script.id } });
+      await db.scriptInstall.deleteMany({ where: refWhere });
       return NextResponse.json({ ok: true });
     }
 
     if (body.action === "toggle") {
-      const existing = await db.scriptInstall.findUnique({
-        where: { userId_scriptId: { userId: user.id, scriptId: script.id } },
-      });
+      const existing = await db.scriptInstall.findUnique({ where });
       if (!existing) throw new ApiError(404, "Not installed");
       await db.scriptInstall.update({ where: { id: existing.id }, data: { enabled: !existing.enabled } });
       return NextResponse.json({ ok: true });

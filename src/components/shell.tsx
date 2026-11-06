@@ -3,8 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Search, Bell, MoonStar, Home, Compass, Library, Layers, History, Download,
-  Puzzle, FileCode2, Database, User, Settings, LogOut, ShieldCheck, Menu,
+  Search, Bell, MoonStar, Home, Compass, Library, Layers, History,
+  Puzzle, FileCode2, Database, User, Settings, LogOut, ShieldCheck,
   ChevronDown, Sparkles, X,
 } from "lucide-react";
 import { useAuth } from "@/components/providers";
@@ -33,7 +33,6 @@ const NAV_ITEMS = [
   { path: "/library", label: "Library", icon: Library },
   { path: "/collections", label: "Collections", icon: Layers },
   { path: "/history", label: "History", icon: History },
-  { path: "/downloads", label: "Downloads", icon: Download },
   { path: "/extensions", label: "Extensions", icon: Puzzle },
   { path: "/scripts", label: "Scripts", icon: FileCode2 },
   { path: "/databases", label: "Databases", icon: Database },
@@ -206,7 +205,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               ))}
             </div>
             <p className="mt-4 text-xs text-muted-foreground">
-              Search runs against the unified database and all installed providers.
+              Search runs live across all installed providers — nothing is stored locally.
             </p>
           </div>
         </DialogContent>

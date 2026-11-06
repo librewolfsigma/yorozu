@@ -2,22 +2,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { handle, readJson, ApiError } from "@/lib/api-utils";
-import { serializeMedia } from "@/lib/serialize";
 
+// Collections — user-owned groups of EXTERNAL refs.
 export async function GET() {
   return handle(async () => {
     const user = await getCurrentUser();
     if (!user) throw new ApiError(401, "Sign in to view collections.");
     const rows = await db.collection.findMany({
       where: { userId: user.id },
-      include: { items: { include: { media: true }, orderBy: { addedAt: "desc" } } },
+      include: { items: { orderBy: { addedAt: "desc" } } },
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json({
       collections: rows.map((c) => ({
-        id: c.id, name: c.name, description: c.description, isPublic: c.isPublic,
-        createdAt: c.createdAt,
-        items: c.items.map((i) => ({ id: i.id, addedAt: i.addedAt, media: serializeMedia(i.media) })),
+        id: c.id, name: c.name, description: c.description, createdAt: c.createdAt,
+        cover: c.items[0]?.coverSnapshot ?? null,
+        items: c.items.map((i) => ({
+          provider: i.providerId,
+          externalId: i.externalId,
+          ref: `${i.providerId}:${i.externalId}`,
+          category: i.category,
+          title: i.titleSnapshot,
+          coverUrl: i.coverSnapshot,
+          addedAt: i.addedAt,
+        })),
       })),
     });
   });
@@ -26,13 +34,12 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await getCurrentUser();
-    if (!user) throw new ApiError(401, "Sign in first.");
+    if (!user) throw new ApiError(401, "Sign in to manage collections.");
     const body = await readJson<{ name?: string; description?: string }>(req);
-    const name = (body.name ?? "").trim();
-    if (!name) throw new ApiError(400, "Collection name is required.");
-    const row = await db.collection.create({
-      data: { userId: user.id, name: name.slice(0, 60), description: body.description?.slice(0, 300) },
+    if (!body.name?.trim()) throw new ApiError(400, "name is required");
+    const collection = await db.collection.create({
+      data: { userId: user.id, name: body.name.trim().slice(0, 80), description: body.description?.slice(0, 300) ?? null },
     });
-    return NextResponse.json({ collection: { id: row.id, name: row.name } });
+    return NextResponse.json({ collection: { id: collection.id, name: collection.name } });
   });
 }

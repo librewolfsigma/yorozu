@@ -2,45 +2,29 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Database, Tags, BarChart3, Search, Puzzle, ExternalLink, AlertTriangle } from "lucide-react";
+import { Database, BarChart3, Search, Puzzle, ExternalLink, AlertTriangle } from "lucide-react";
 import { api } from "@/lib/client-api";
-import { navigate } from "@/hooks/use-hash-route";
 import { categoryMeta, fmtNumber, timeAgo } from "@/lib/category-meta";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import type { WorkDTO } from "@/lib/serialize";
 
-// Backed by the live /api/databases route:
-//  - databases: real metadata-database directory entries from the Wotaku provider
-//  - tags: real tags aggregated from imported provider content
-//  - stats: platform statistics incl. per-provider health
+// Backed by the live /api/databases route (client-first — nothing is stored):
+//  - databases: the live Wotaku metadata-database directory (WorkDTO entries)
+//  - stats: installed-provider counts + health (the only "catalog" Yozora owns)
 
-interface DatabaseEntry {
-  id: string;
-  title: string;
-  description: string | null;
-  accent: string | null;
-  category: string;
-  externalUrl: string | null;
-  imported: boolean;
-  provider: { id: string; name: string; status: string };
-}
-interface DatabasesData {
-  databases: DatabaseEntry[];
-}
-interface TagsData {
-  tags: { name: string; count: number }[];
+type DatabaseEntry = WorkDTO;
+
+interface StatsData {
+  byCategory: { category: string; count: number }[];
+  totals: { providers: number; healthy: number; degraded: number };
+  providersHealth: ProviderHealthRow[];
 }
 interface ProviderHealthRow {
   id: string; name: string; category: string;
   status: string; lastCheckedAt: string | null; lastError: string | null;
-}
-interface StatsData {
-  byCategory: { category: string; count: number }[];
-  totals: { providers: number; chapters: number; pages: number; episodes: number; galleryImages: number };
-  providersHealth: ProviderHealthRow[];
-  topStudios: { name: string; count: number }[];
 }
 
 function statusDot(status: string): string {
@@ -58,15 +42,10 @@ export default function DatabasesView() {
   const [tab, setTab] = useState("databases");
   const [q, setQ] = useState("");
 
-  const { data: dbs } = useQuery({
+  const { data: dbs, isLoading: dbsLoading } = useQuery({
     queryKey: ["databases", "databases", q],
-    queryFn: () => api<DatabasesData>(`/api/databases?type=databases&q=${encodeURIComponent(q)}`),
+    queryFn: () => api<{ databases: DatabaseEntry[] }>(`/api/databases?type=databases&q=${encodeURIComponent(q)}`),
     enabled: tab === "databases",
-  });
-  const { data: tags } = useQuery({
-    queryKey: ["databases", "tags", q],
-    queryFn: () => api<TagsData>(`/api/databases?type=tags&q=${encodeURIComponent(q)}`),
-    enabled: tab === "tags",
   });
   const { data: stats } = useQuery({
     queryKey: ["databases", "stats"],
@@ -82,12 +61,12 @@ export default function DatabasesView() {
         </span>
         <div className="flex-1">
           <h1 className="font-display text-3xl text-white">Databases</h1>
-          <p className="text-[13px] text-muted-foreground">Live metadata databases, real content tags and provider statistics</p>
+          <p className="text-[13px] text-muted-foreground">Live metadata-database directory and installed-provider health</p>
         </div>
-        {(tab === "databases" || tab === "tags") && (
+        {tab === "databases" && (
           <div className="relative w-48 sm:w-56">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter…" className="h-9 rounded-lg bg-card pl-8" aria-label="Filter list" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter…" className="h-9 rounded-lg bg-card pl-8" aria-label="Filter directory" />
           </div>
         )}
       </div>
@@ -95,33 +74,37 @@ export default function DatabasesView() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="flex-wrap gap-1 rounded-xl bg-card">
           <TabsTrigger value="databases" className="gap-1.5 rounded-lg"><Database className="h-3.5 w-3.5" /> Databases</TabsTrigger>
-          <TabsTrigger value="tags" className="gap-1.5 rounded-lg"><Tags className="h-3.5 w-3.5" /> Tags</TabsTrigger>
           <TabsTrigger value="stats" className="gap-1.5 rounded-lg"><BarChart3 className="h-3.5 w-3.5" /> Stats</TabsTrigger>
           <TabsTrigger value="providers" className="gap-1.5 rounded-lg"><Puzzle className="h-3.5 w-3.5" /> Providers</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {/* databases */}
+      {/* databases — live directory, external links only */}
       {tab === "databases" && (
         <div className="mt-6">
-          {(dbs?.databases?.length ?? 0) === 0 ? (
+          {dbsLoading ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => <div key={i} className="yz-skeleton h-36 rounded-xl" />)}
+            </div>
+          ) : (dbs?.databases?.length ?? 0) === 0 ? (
             <p className="rounded-xl border border-dashed border-border bg-card/50 p-8 text-center text-sm text-muted-foreground">
               {dbs ? "No databases match your search." : "Loading the database directory…"}
             </p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {dbs!.databases.map((d) => {
-                const accent = d.accent ?? "#7C8CFF";
+                const accent = d.accent || "#7C8CFF";
+                const meta = categoryMeta(d.category);
                 return (
-                  <div key={d.id} className="flex flex-col rounded-xl border border-border bg-card p-4">
+                  <div key={d.ref} className="flex flex-col rounded-xl border border-border bg-card p-4">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-[13.5px] font-bold leading-snug">{d.title}</p>
                       <span
                         className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
-                        title={`Provider: ${d.provider.name} (${d.provider.status})`}
+                        title={`Listed by the ${d.providerName} live directory`}
                       >
-                        <span className={cn("h-1.5 w-1.5 rounded-full", statusDot(d.provider.status))} />
-                        {d.provider.name}
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: meta.hub }} />
+                        {d.providerName}
                       </span>
                     </div>
                     {d.description && (
@@ -142,9 +125,9 @@ export default function DatabasesView() {
                       ) : (
                         <span className="text-[11px] text-muted-foreground">No public URL</span>
                       )}
-                      {d.imported && (
-                        <span className="rounded-full bg-[#3BD47A]/10 px-2 py-0.5 text-[10px] font-bold text-[#3BD47A]">Imported</span>
-                      )}
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        {d.format ?? meta.label}
+                      </span>
                     </div>
                   </div>
                 );
@@ -154,43 +137,14 @@ export default function DatabasesView() {
         </div>
       )}
 
-      {/* tags */}
-      {tab === "tags" && (
-        <div className="mt-6">
-          {(tags?.tags?.length ?? 0) === 0 ? (
-            <p className="rounded-xl border border-dashed border-border bg-card/50 p-8 text-center text-sm text-muted-foreground">
-              {tags
-                ? "No tags yet — import content from the Extensions page to build the tag cloud."
-                : "Loading tags…"}
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {(tags?.tags ?? []).map((t) => (
-                <button
-                  key={t.name}
-                  onClick={() => navigate(`/browse/ANIME?q=${encodeURIComponent(t.name)}`)}
-                  aria-label={`Browse titles tagged ${t.name}`}
-                  className="rounded-full border border-border bg-card px-3 py-1.5 text-[12px] font-semibold text-foreground/90 transition-colors hover:border-[#7C8CFF]/50 hover:text-[#7C8CFF]"
-                >
-                  {t.name} <span className="ml-0.5 opacity-60">{fmtNumber(t.count)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* stats */}
-      {tab === "stats" && stats && (
+      {/* stats — provider counts + health (no media/chapters/pages: those tables no longer exist) */}
+      {tab === "stats" && (stats ? (
         <div className="mt-6 space-y-5">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-3 gap-3">
             {[
-              ["Titles", stats.byCategory.reduce((a, b) => a + b.count, 0)],
               ["Providers", stats.totals.providers],
-              ["Chapters", stats.totals.chapters],
-              ["Reader pages", stats.totals.pages],
-              ["Episodes", stats.totals.episodes],
-              ["Gallery images", stats.totals.galleryImages],
+              ["Healthy", stats.totals.healthy],
+              ["Degraded", stats.totals.degraded],
             ].map(([label, value]) => (
               <div key={String(label)} className="rounded-xl border border-border bg-card p-4 text-center">
                 <p className="font-display text-2xl text-white">{fmtNumber(Number(value))}</p>
@@ -199,9 +153,11 @@ export default function DatabasesView() {
             ))}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-border bg-card p-4">
-              <h3 className="mb-3 text-[13px] font-bold uppercase tracking-wide text-muted-foreground">By category</h3>
+          <div className="rounded-xl border border-border bg-card p-4">
+            <h3 className="mb-3 text-[13px] font-bold uppercase tracking-wide text-muted-foreground">Installed providers by category</h3>
+            {stats.byCategory.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No providers installed yet.</p>
+            ) : (
               <div className="space-y-2">
                 {stats.byCategory.slice().sort((a, b) => b.count - a.count).map((c) => {
                   const meta = categoryMeta(c.category);
@@ -217,35 +173,23 @@ export default function DatabasesView() {
                   );
                 })}
               </div>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <h3 className="mb-3 text-[13px] font-bold uppercase tracking-wide text-muted-foreground">Most prolific studios</h3>
-              <div className="space-y-2">
-                {stats.topStudios.length === 0 && (
-                  <p className="text-xs text-muted-foreground">No studio metadata has been imported yet.</p>
-                )}
-                {stats.topStudios.map((s, i) => (
-                  <div key={s.name} className="flex items-center gap-3 text-[13px]">
-                    <span className="w-5 font-display text-base text-muted-foreground">{i + 1}</span>
-                    <span className="flex-1 font-semibold">{s.name}</span>
-                    <span className="text-muted-foreground">{s.count} titles</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
 
           <ProviderHealth rows={stats.providersHealth} />
         </div>
-      )}
-
-      {/* providers */}
-      {tab === "providers" && stats && <ProviderHealth rows={stats.providersHealth} />}
-      {(tab === "stats" || tab === "providers") && !stats && (
+      ) : (
         <p className="mt-6 rounded-xl border border-dashed border-border bg-card/50 p-8 text-center text-sm text-muted-foreground">
           Loading statistics…
         </p>
-      )}
+      ))}
+
+      {/* providers */}
+      {tab === "providers" && (stats ? <ProviderHealth rows={stats.providersHealth} /> : (
+        <p className="mt-6 rounded-xl border border-dashed border-border bg-card/50 p-8 text-center text-sm text-muted-foreground">
+          Loading statistics…
+        </p>
+      ))}
     </div>
   );
 }

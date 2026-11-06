@@ -9,13 +9,13 @@ import { navigate } from "@/hooks/use-hash-route";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-interface HistoryResponse {
-  entries: {
-    id: string; action: string; category: string;
-    detail: Record<string, unknown> | null;
-    titleSnapshot: string | null; coverSnapshot: string | null;
-    createdAt: string; mediaSlug: string | null;
-  }[];
+/** Snapshot-only history row — no media FK; ref is the external address. */
+interface HistoryEntry {
+  id: string; action: string; category: string;
+  provider: string | null; externalId: string | null; ref: string | null;
+  detail: Record<string, unknown> | null;
+  titleSnapshot: string | null; coverSnapshot: string | null;
+  createdAt: string;
 }
 
 const ACTION_META: Record<string, { label: string; color: string }> = {
@@ -25,8 +25,6 @@ const ACTION_META: Record<string, { label: string; color: string }> = {
   PLAY: { label: "Played", color: "#FF6F91" },
   SEARCH: { label: "Searched", color: "#FFBE4A" },
   BROWSE: { label: "Browsed", color: "#AE8BFF" },
-  IMPORT: { label: "Imported", color: "#3BD47A" },
-  DOWNLOAD: { label: "Downloaded", color: "#FF8A4C" },
   INSTALL: { label: "Installed", color: "#3BD47A" },
 };
 
@@ -35,7 +33,7 @@ export default function HistoryView() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["history"],
-    queryFn: () => api<HistoryResponse>("/api/history?limit=120"),
+    queryFn: () => api<{ entries: HistoryEntry[] }>("/api/history?limit=120"),
     enabled: !!user,
   });
 
@@ -91,16 +89,19 @@ export default function HistoryView() {
           {entries.map((e) => {
             const meta = ACTION_META[e.action] ?? ACTION_META.VIEW;
             const searchable = e.action === "SEARCH";
-            const clickable = e.mediaSlug;
+            const openable = !!e.provider && !!e.externalId;
             return (
               <button
                 key={e.id}
-                onClick={() => (searchable ? navigate(`/search?q=${encodeURIComponent(String(e.titleSnapshot ?? ""))}`) : clickable ? navigate(`/media/${clickable}`) : undefined)}
+                onClick={() => {
+                  if (searchable) navigate(`/search?q=${encodeURIComponent(String(e.titleSnapshot ?? ""))}`);
+                  else if (openable) navigate(`/media?p=${encodeURIComponent(e.provider!)}&id=${encodeURIComponent(e.externalId!)}`);
+                }}
                 className="flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-white/5 disabled:cursor-default"
-                disabled={!searchable && !clickable}
+                disabled={!searchable && !openable}
               >
                 {e.coverSnapshot ? (
-                   
+                  // snapshot cover — display cache only
                   <img src={e.coverSnapshot} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
                 ) : (
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-muted font-bold text-muted-foreground">{e.action.slice(0, 1)}</span>

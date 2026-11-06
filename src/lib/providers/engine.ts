@@ -1,465 +1,391 @@
-// Provider engine — Mihon-inspired extension architecture backed by REAL
-// external integrations. Every adapter in ./live/ talks to a verified public
-// API or public web pages; nothing here simulates upstream behaviour.
+// Provider engine — the client-first core (docs/CLIENT_ARCHITECTURE.md).
 //
-// Health checks are real requests. Search hits the real provider. Import
-// materializes real metadata and real content-unit URLs into the unified DB.
+// Yozora is a CLIENT: this module never persists provider results. It
+//  - serves the static registry + the user's overlay (install/config/health),
+//  - performs LIVE search / discover / details / units / page resolution,
+//  - memoizes upstream responses in the bounded TTL cache only.
+// Dedup happens per request on external refs — there is no local index.
 
 import { db } from "@/lib/db";
 import { ApiError } from "@/lib/api-utils";
-import { PROVIDER_REGISTRY } from "./registry";
+import { PROVIDER_REGISTRY, type ProviderDef } from "./registry";
 import { getLiveAdapter } from "./live";
-import type { LiveSearchItem, LiveUnits, SearchOpts } from "./live/types";
-import { normalizeTitle, slugify } from "@/lib/content-factory";
-import { proxyUrl } from "@/lib/imgproxy";
-import { serializeCatalogItem } from "@/lib/serialize";
-import { accentFor } from "@/lib/content-factory";
+import type { LiveAdapter, LiveUnits } from "./live/types";
+import { toWorkDTO, dedupeByRef, type WorkDTO } from "@/lib/serialize";
+import { cached, TTL } from "@/lib/cache";
 
-export { serializeCatalogItem };
+// ─── capability declarations (honest: what the adapter really does) ───
 
-const FLAG_MEDIA = JSON.stringify([
-  "Explicit adult content (18+)",
-  "All depicted characters are fictional adults (18+)",
-]);
-const FLAG_AV = JSON.stringify([
-  "Explicit adult content (18+)",
-  "All performers depicted are fictional/adult-animated characters or verified adults per the source site",
-  "Content served by the integrated third-party provider",
-]);
+const CAN_WATCH = new Set(["rule34video"]);
+const CAN_READ = new Set(["mangadex", "ehentai", "manga18fx"]);
+const CAN_VIEW = new Set(["e621", "yandere", "hypnohub", "gelbooru"]);
 
-// ─── list ───
-export async function listProviders() {
-  const rows = await db.provider.findMany({
-    include: { _count: { select: { items: true } } },
-  });
-  const serialize = (r: (typeof rows)[number]) => ({
-    id: r.id, name: r.name, category: r.category, description: r.description,
-    version: r.version, author: r.author, homepage: r.homepage,
-    capabilities: JSON.parse(r.capabilities), configSchema: JSON.parse(r.configSchema || "[]"),
-    config: JSON.parse(r.config || "{}"),
-    status: r.status, lastError: r.lastError, lastCheckedAt: r.lastCheckedAt,
-    installedAt: r.installedAt, itemCount: r._count.items,
-    live: true,
-    integration: getLiveAdapter(r.id)?.integration ?? null,
-  });
+/** Fixed AV subcategory per provider — JAV/PMV/HMV/CREATOR never merge into AV. */
+export const PROVIDER_VIDEO_KIND: Record<string, string> = {
+  stashdb: "AV",
+  rule34video: "AV",
+  javstash: "JAV",
+  fansdb: "CREATOR",
+  pmvstash: "PMV", // adapter also tags HMV items from upstream tags
+};
+
+export interface ProviderDTO {
+  id: string;
+  name: string;
+  category: string;
+  videoKind: string | null;
+  description: string;
+  version: string;
+  author: string;
+  homepage: string;
+  capabilities: string[];
+  configSchema: ProviderDef["configSchema"];
+  config: Record<string, string>;
+  status: string; // ACTIVE | ERROR | DISABLED
+  lastError: string | null;
+  lastCheckedAt: Date | null;
+  installed: boolean;
+  integration: string | null;
+  configRequired: boolean; // true when required API keys are not set yet
+  availability: { watch: boolean; read: boolean; view: boolean };
+}
+
+function overlayToStatus(row: { status: string; lastError: string | null; lastCheckedAt: Date | null; config: string | null; installed: boolean } | null) {
   return {
-    installed: rows.filter((r) => r.installed).map(serialize),
-    repository: rows.filter((r) => !r.installed).map(serialize),
+    status: row?.status ?? "ACTIVE",
+    lastError: row?.lastError ?? null,
+    lastCheckedAt: row?.lastCheckedAt ?? null,
+    config: (row?.config ? JSON.parse(row.config) : {}) as Record<string, string>,
+    installed: row?.installed ?? true,
   };
 }
 
-// ─── install / uninstall / toggle / configure ───
-export async function installProvider(id: string) {
-  const def = PROVIDER_REGISTRY.find((p) => p.id === id);
-  const existing = await db.provider.findUnique({ where: { id } });
-  if (existing?.installed) {
-    throw new ApiError(409, "Provider already installed");
-  }
-  if (existing) {
-    await db.provider.update({
-      where: { id },
-      data: { installed: true, status: "ACTIVE", lastError: null },
-    });
-    return db.provider.findUnique({ where: { id } });
-  }
-  if (!def) throw new ApiError(404, `Unknown provider: ${id}`);
-  return db.provider.create({
-    data: {
-      id: def.id, name: def.name, category: def.category,
-      description: def.description, version: def.version, author: def.author,
-      homepage: def.homepage,
-      capabilities: JSON.stringify(def.capabilities),
-      configSchema: JSON.stringify(def.configSchema),
-      config: JSON.stringify({}),
-      status: "ACTIVE", installed: true,
+function missingRequiredConfig(def: ProviderDef, config: Record<string, string>): string[] {
+  return def.configSchema.filter((f) => f.required && !config[f.key]).map((f) => f.label);
+}
+
+function defToDTO(def: ProviderDef, row: Parameters<typeof overlayToStatus>[0]): ProviderDTO {
+  const s = overlayToStatus(row);
+  const missing = missingRequiredConfig(def, s.config);
+  return {
+    id: def.id,
+    name: def.name,
+    category: def.category,
+    videoKind: PROVIDER_VIDEO_KIND[def.id] ?? null,
+    description: def.description,
+    version: def.version,
+    author: def.author,
+    homepage: def.homepage,
+    capabilities: def.capabilities,
+    configSchema: def.configSchema,
+    config: s.config,
+    status: !s.installed ? "DISABLED" : missing.length ? "ERROR" : s.status,
+    lastError: s.lastError,
+    lastCheckedAt: s.lastCheckedAt,
+    installed: s.installed,
+    integration: getLiveAdapter(def.id)?.integration ?? null,
+    configRequired: missing.length > 0,
+    availability: {
+      watch: CAN_WATCH.has(def.id),
+      read: CAN_READ.has(def.id),
+      view: CAN_VIEW.has(def.id),
     },
+  };
+}
+
+// ─── listing (registry + overlay; no counts — there is no catalog) ───
+
+export async function listProviders() {
+  const rows = await db.provider.findMany();
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const all = PROVIDER_REGISTRY.map((def) => defToDTO(def, byId.get(def.id) ?? null));
+  return {
+    installed: all.filter((p) => p.installed),
+    repository: all.filter((p) => !p.installed),
+  };
+}
+
+export async function getProviderDTO(id: string): Promise<{ def: ProviderDef; dto: ProviderDTO; adapter: LiveAdapter | null }> {
+  const def = PROVIDER_REGISTRY.find((p) => p.id === id);
+  if (!def) throw new ApiError(404, `Unknown provider: ${id}`);
+  const row = await db.provider.findUnique({ where: { id } });
+  return { def, dto: defToDTO(def, row), adapter: getLiveAdapter(id) };
+}
+
+function providerOpts(dto: ProviderDTO): SearchOptsX {
+  return { config: dto.config };
+}
+type SearchOptsX = { config: Record<string, string> };
+
+function assertUsable(dto: ProviderDTO) {
+  if (!dto.installed) throw new ApiError(409, `${dto.name} is not installed`);
+  if (dto.status === "DISABLED") throw new ApiError(409, `${dto.name} is disabled`);
+  if (dto.configRequired) {
+    throw new ApiError(409, `${dto.name} needs configuration: set the required API key(s) in Extensions first.`);
+  }
+}
+
+// ─── install / uninstall / toggle / configure (user-owned overlay only) ───
+
+export async function installProvider(id: string) {
+  const { def } = await getProviderDTO(id);
+  await db.provider.upsert({
+    where: { id: def.id },
+    create: { id: def.id, installed: true, status: "ACTIVE", config: JSON.stringify({}) },
+    update: { installed: true, status: "ACTIVE", lastError: null },
   });
+  return { ok: true };
 }
 
 export async function uninstallProvider(id: string) {
-  const row = await db.provider.findUnique({ where: { id } });
-  if (!row) throw new ApiError(404, "Provider not installed");
-  await db.provider.update({
+  await getProviderDTO(id);
+  await db.provider.upsert({
     where: { id },
-    data: { installed: false, status: "DISABLED", lastError: null },
+    create: { id, installed: false, status: "DISABLED", config: JSON.stringify({}) },
+    update: { installed: false, status: "DISABLED", lastError: null },
   });
+  return { ok: true };
 }
 
 export async function toggleProvider(id: string) {
-  const row = await db.provider.findUnique({ where: { id } });
-  if (!row) throw new ApiError(404, "Provider not installed");
-  if (!row.installed) throw new ApiError(409, "Provider is not installed");
-  return db.provider.update({
+  const { dto } = await getProviderDTO(id);
+  if (!dto.installed) throw new ApiError(409, "Provider is not installed");
+  const next = dto.status === "DISABLED" ? "ACTIVE" : "DISABLED";
+  await db.provider.upsert({
     where: { id },
-    data: { status: row.status === "DISABLED" ? "ACTIVE" : "DISABLED", lastError: null },
+    create: { id, installed: true, status: next, config: JSON.stringify({}) },
+    update: { status: next, lastError: null },
   });
+  return { ok: true, status: next };
 }
 
 export async function configureProvider(id: string, config: Record<string, unknown>) {
-  const row = await db.provider.findUnique({ where: { id } });
-  if (!row) throw new ApiError(404, "Provider not installed");
-  const schema = JSON.parse(row.configSchema || "[]") as { key: string; required?: boolean }[];
-  for (const field of schema) {
+  const { def } = await getProviderDTO(id);
+  for (const field of def.configSchema) {
     if (field.required && (config[field.key] === undefined || config[field.key] === "")) {
-      throw new ApiError(400, `Missing required config: ${field.key}`);
+      throw new ApiError(400, `Missing required config: ${field.label}`);
     }
   }
-  return db.provider.update({
+  await db.provider.upsert({
     where: { id },
-    data: { config: JSON.stringify(config), lastError: null },
+    create: { id, installed: true, status: "ACTIVE", config: JSON.stringify(config) },
+    update: { config: JSON.stringify(config), lastError: null, status: "ACTIVE" },
   });
+  return { ok: true };
 }
 
-// ─── health check — REAL upstream request via the adapter ───
-export async function healthCheck(id: string) {
-  const row = await db.provider.findUnique({ where: { id } });
-  if (!row) throw new ApiError(404, "Provider not installed");
+// ─── health check — a REAL upstream request, status stored on the overlay ───
 
+export async function healthCheck(id: string) {
+  const { dto, adapter } = await getProviderDTO(id);
   let status = "ACTIVE";
   let lastError: string | null = null;
 
-  if (row.status === "DISABLED") {
+  if (!dto.installed || dto.status === "DISABLED") {
     status = "DISABLED";
     lastError = "Provider is disabled.";
+  } else if (dto.configRequired) {
+    status = "ERROR";
+    lastError = `Configuration required: set the provider's API key(s) in Extensions. This is expected until you add them — the provider reports it honestly instead of faking results.`;
+  } else if (!adapter) {
+    status = "ERROR";
+    lastError = "No live adapter implementation is registered for this provider.";
   } else {
-    const schema = JSON.parse(row.configSchema || "[]") as { key: string; required?: boolean; label: string }[];
-    const config = JSON.parse(row.config || "{}");
-    const missing = schema.find((f) => f.required && !config[f.key]);
-    const adapter = getLiveAdapter(id);
-    if (missing) {
+    try {
+      await adapter.ping(dto.config);
+    } catch (e) {
       status = "ERROR";
-      lastError = `Configuration required: set "${missing.label}" before this provider can connect.`;
-    } else if (!adapter) {
-      status = "ERROR";
-      lastError = "No live adapter implementation is registered for this provider.";
-    } else {
-      try {
-        await adapter.ping(config);
-      } catch (e) {
-        status = "ERROR";
-        lastError = e instanceof Error ? e.message : String(e);
-      }
+      lastError = e instanceof Error ? e.message : String(e);
     }
   }
 
-  const updated = await db.provider.update({
+  await db.provider.upsert({
     where: { id },
-    data: { status, lastError, lastCheckedAt: new Date() },
+    create: { id, installed: dto.installed, status, lastError, lastCheckedAt: new Date(), config: JSON.stringify(dto.config) },
+    update: { status, lastError, lastCheckedAt: new Date() },
   });
 
-  if (status === "ERROR") {
+  // Notify users only on REAL upstream failures — never for missing keys.
+  if (status === "ERROR" && !dto.configRequired) {
     const users = await db.user.findMany({ select: { id: true }, take: 50 });
     for (const u of users) {
       await db.notification.create({
         data: {
-          userId: u.id, type: "PROVIDER", title: `${row.name} health check failed`,
-          body: lastError ?? "Unknown error", link: "#/extensions",
+          userId: u.id, type: "PROVIDER", title: `${dto.name} health check failed`,
+          body: (lastError ?? "Unknown error").slice(0, 300), link: "#/extensions",
         },
-      });
+      }).catch(() => null);
     }
   }
 
+  return { id, status, lastError, lastCheckedAt: new Date() };
+}
+
+// ─── LIVE search (single provider) ───
+
+export async function searchOneProvider(def: ProviderDef, dto: ProviderDTO, q: string, page: number): Promise<WorkDTO[]> {
+  assertUsable(dto);
+  const adapter = getLiveAdapter(def.id);
+  if (!adapter) throw new ApiError(500, `No live adapter for ${def.id}`);
+  return cached("search", `${def.id}:${q}:${page}`, TTL.SEARCH, async () => {
+    const items = await adapter.search(q, { page, ...providerOpts(dto) });
+    return dedupeByRef(
+      items
+        .filter((i) => i.externalId && i.title)
+        .slice(0, 24)
+        .map((i) => toWorkDTO(i, { id: def.id, name: def.name, canWatch: CAN_WATCH.has(def.id), canRead: CAN_READ.has(def.id), canView: CAN_VIEW.has(def.id) })),
+    );
+  });
+}
+
+/** Unified search across every usable provider in scope. Never persists. */
+export async function searchProviders(opts: { q: string; category?: string; providers?: string[]; page?: number }) {
+  const page = Math.max(1, opts.page ?? 1);
+  const q = opts.q.trim();
+  const { installed } = await listProviders();
+  let scope = installed;
+  if (opts.category) scope = scope.filter((p) => p.category === opts.category);
+  if (opts.providers?.length) scope = scope.filter((p) => opts.providers!.includes(p.id));
+
+  const settled = await Promise.all(
+    scope.map(async (p) => {
+      try {
+        const items = await searchOneProvider(
+          PROVIDER_REGISTRY.find((d) => d.id === p.id)!,
+          p,
+          q,
+          page,
+        );
+        return {
+          provider: { id: p.id, name: p.name, status: p.status, videoKind: p.videoKind, availability: p.availability, configRequired: p.configRequired },
+          items,
+          error: null as string | null,
+        };
+      } catch (e) {
+        return {
+          provider: { id: p.id, name: p.name, status: p.status, videoKind: p.videoKind, availability: p.availability, configRequired: p.configRequired },
+          items: [] as WorkDTO[],
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    }),
+  );
+
+  const ok = settled.filter((s) => !s.error);
   return {
-    id: updated.id, status: updated.status,
-    lastError: updated.lastError, lastCheckedAt: updated.lastCheckedAt,
+    q,
+    page,
+    providerResults: settled.flatMap((s) => s.items),
+    groups: Object.fromEntries(
+      ok.map((s) => [s.provider.id, { provider: s.provider, items: s.items }]),
+    ),
+    providerErrors: settled.filter((s) => s.error).map((s) => ({ provider: s.provider.name, error: s.error })),
+    total: settled.reduce((n, s) => n + s.items.length, 0),
   };
 }
 
-// ─── catalog helpers ───
+// ─── discover rails — live popular listings, TTL-cached, never persisted ───
 
-export async function upsertLiveItems(providerId: string, items: LiveSearchItem[]) {
-  type CatalogRow = Parameters<typeof serializeCatalogItem>[0];
-  const rows: CatalogRow[] = [];
-  for (const item of items.slice(0, 40)) {
-    const data = {
-      providerId,
-      externalId: item.externalId,
-      title: item.title.slice(0, 300),
-      titleKey: normalizeTitle(item.title).slice(0, 300),
-      altTitles: JSON.stringify((item.altTitles ?? []).slice(0, 10)),
-      description: item.description ?? null,
-      coverUrl: item.coverUrl ?? null,
-      bannerUrl: item.bannerUrl ?? null,
-      category: item.category,
-      videoKind: item.videoKind ?? null,
-      format: item.format ?? null,
-      status: item.status ?? null,
-      year: item.year ?? null,
-      score: item.score ?? null,
-      popularity: item.popularity ?? 0,
-      genres: JSON.stringify(item.genres ?? []),
-      tags: JSON.stringify((item.tags ?? []).slice(0, 40)),
-      studio: item.studio ?? null,
-      creator: item.creator ?? null,
-      ageRating: "18+",
-      contentFlags: item.category === "AV" ? FLAG_AV : FLAG_MEDIA,
-      externalUrl: item.externalUrl ?? null,
-      extra: JSON.stringify(item.extra ?? {}),
-      episodesCount: item.episodesCount ?? null,
-      chaptersCount: item.chaptersCount ?? null,
-      galleryCount: item.galleryCount ?? null,
-    };
-    const row = await db.catalogItem.upsert({
-      where: { providerId_externalId: { providerId, externalId: item.externalId } },
-      create: data,
-      update: {
-        title: data.title, titleKey: data.titleKey, altTitles: data.altTitles,
-        description: data.description, coverUrl: data.coverUrl, bannerUrl: data.bannerUrl,
-        score: data.score, popularity: data.popularity, genres: data.genres,
-        tags: data.tags, externalUrl: data.externalUrl, extra: data.extra,
-        videoKind: data.videoKind,
-      },
-    });
-    rows.push(row);
-  }
-  return rows;
-}
-
-function providerOpts(row: { config: string | null }): SearchOpts {
-  return { config: JSON.parse(row.config || "{}") };
-}
-
-// ─── catalog search for one provider — LIVE upstream call ───
-export async function searchCatalog(providerId: string, opts: { q?: string; page?: number; pageSize?: number }) {
-  const provider = await db.provider.findUnique({ where: { id: providerId } });
-  if (!provider) throw new ApiError(404, "Provider not installed");
-  if (provider.status === "DISABLED") throw new ApiError(409, "Provider is disabled");
-  const page = Math.max(1, opts.page ?? 1);
-  const pageSize = Math.min(50, Math.max(1, opts.pageSize ?? 24));
-  const adapter = getLiveAdapter(providerId);
-  if (!adapter) throw new ApiError(500, `No live adapter for ${providerId}`);
-
-  try {
-    const items = await adapter.search(opts.q ?? "", { page, ...providerOpts(provider) });
-    const rows = await upsertLiveItems(providerId, items);
-    return {
-      provider: { id: provider.id, name: provider.name, category: provider.category, status: provider.status, live: true },
-      items: rows.map(serializeCatalogItem),
-      total: rows.length, page, pageSize,
-      live: true,
-    };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    await db.provider.update({
-      where: { id: providerId },
-      data: { status: "ERROR", lastError: msg, lastCheckedAt: new Date() },
-    }).catch(() => null);
-    throw new ApiError(502, `${provider.name}: ${msg}`);
-  }
-}
-
-// ─── discover rails — popular listings from live providers, cached as rows ───
-export async function discoverCategory(category: string) {
-  const providers = await db.provider.findMany({
-    where: { installed: true, status: { not: "DISABLED" }, category },
-  });
-  const rails: { providerId: string; providerName: string; items: ReturnType<typeof serializeCatalogItem>[]; error?: string }[] = [];
-  await Promise.all(providers.map(async (p) => {
-    const adapter = getLiveAdapter(p.id);
-    if (!adapter?.popular) return;
-    try {
-      const items = await adapter.popular({ page: 1 });
-      const rows = await upsertLiveItems(p.id, items.slice(0, 24));
-      rails.push({
-        providerId: p.id, providerName: p.name,
-        items: rows.map(serializeCatalogItem),
-      });
-    } catch (e) {
-      rails.push({
-        providerId: p.id, providerName: p.name, items: [],
-        error: e instanceof Error ? e.message : String(e),
-      });
+export async function discoverCategory(category: string, kind?: string) {
+  const { installed } = await listProviders();
+  let scope = installed.filter((p) => p.category === category);
+  if (kind) {
+    if (kind === "HMV") {
+      // HMV content lives on PMV Stash alongside PMV
+      scope = scope.filter((p) => PROVIDER_VIDEO_KIND[p.id] === "PMV");
+    } else {
+      scope = scope.filter((p) => PROVIDER_VIDEO_KIND[p.id] === kind);
     }
-  }));
-  return { category, rails };
-}
-
-// ─── lightweight import: catalog row → unified Media without unit fetching ───
-// Used by home/browse rails so cards get real slugs immediately. Chapters,
-// pages and streams are materialized by the full import path (source pages)
-// or lazily resolved by /api/chapters/[id] when a reader opens them.
-export async function importLightweight(catalogItemId: string) {
-  const item = await db.catalogItem.findUnique({ where: { id: catalogItemId } });
-  if (!item) return null;
-  const key = item.titleKey || normalizeTitle(item.title);
-  const existing = await db.media.findFirst({ where: { titleKey: key, category: item.category } });
-  if (existing) {
-    const link = await db.providerLink.findUnique({
-      where: { providerId_externalId: { providerId: item.providerId, externalId: item.externalId } },
-    });
-    if (!link) {
-      await db.providerLink.create({
-        data: { mediaId: existing.id, providerId: item.providerId, externalId: item.externalId, externalUrl: item.externalUrl },
-      });
-    }
-    return existing;
   }
 
-  const accent = accentFor(item.category, key);
-  const extra = JSON.parse(item.extra || "{}") as Record<string, unknown>;
-  let slug = slugify(item.title) || `item-${item.externalId}`;
-  let n = 2;
-  while (await db.media.findUnique({ where: { slug } })) slug = `${slugify(item.title) || item.externalId}-${n++}`;
-
-  const externalLinks: { label: string; url: string }[] = [];
-  if (item.externalUrl) externalLinks.push({ label: "Open on provider site", url: item.externalUrl });
-  if (extra.magnet) externalLinks.push({ label: "Magnet download (external client)", url: String(extra.magnet) });
-
-  return db.media.create({
-    data: {
-      slug, title: item.title, titleKey: key,
-      altTitles: item.altTitles,
-      description: item.description,
-      coverUrl: proxyUrl(item.coverUrl),
-      bannerUrl: proxyUrl(item.bannerUrl),
-      accent: accent[0], accent2: accent[1],
-      category: item.category, format: item.format, status: item.status,
-      year: item.year,
-      videoKind: item.videoKind ?? null,
-      rating: item.score ?? 0,
-      ratingCount: item.popularity ?? 0,
-      popularity: item.popularity,
-      genres: item.genres, tags: item.tags,
-      studio: item.studio, creator: item.creator,
-      ageRating: item.ageRating,
-      contentFlags: item.category === "AV" ? FLAG_AV : FLAG_MEDIA,
-      externalLinks: JSON.stringify(externalLinks),
-      extra: JSON.stringify({ ...extra, sourceProvider: item.providerId, importedFrom: item.providerId }),
-    },
-  });
-}
-
-// ─── import: provider catalog item → unified media (with dedup merge) ───
-export async function importCatalogItem(catalogItemId: string) {
-  const item = await db.catalogItem.findUnique({ where: { id: catalogItemId } });
-  if (!item) throw new ApiError(404, "Catalog item not found");
-  const provider = await db.provider.findUnique({ where: { id: item.providerId } });
-  if (!provider || !provider.installed) throw new ApiError(409, "Install the provider first");
-  if (provider.status === "DISABLED") throw new ApiError(409, "Enable the provider first");
-  const adapter = getLiveAdapter(item.providerId);
-
-  const key = item.titleKey || normalizeTitle(item.title);
-  let media = await db.media.findFirst({ where: { titleKey: key, category: item.category } });
-
-  if (!media) {
-    const accent = accentFor(item.category, key);
-    const extra = JSON.parse(item.extra || "{}") as Record<string, unknown>;
-    let slug = slugify(item.title) || `item-${item.externalId}`;
-    let n = 2;
-    while (await db.media.findUnique({ where: { slug } })) slug = `${slugify(item.title) || item.externalId}-${n++}`;
-
-    // enrich from the live provider when possible (fresh description etc.)
-    let details: LiveSearchItem | null = null;
-    if (adapter?.details) {
-      details = await adapter.details(item.externalId, providerOpts(provider)).catch(() => null);
-    }
-
-    const externalLinks: { label: string; url: string }[] = [];
-    if (item.externalUrl) externalLinks.push({ label: `Open on ${provider.name}`, url: item.externalUrl });
-    if (extra.magnet) externalLinks.push({ label: "Magnet download (external client)", url: String(extra.magnet) });
-    for (const l of (extra.externalReadLinks as string[] | undefined) ?? []) {
-      externalLinks.push({ label: `External read link (${new URL(l).host})`, url: l });
-    }
-    if (extra.tier) externalLinks.push({ label: `WholesomeList tier: ${String(extra.tier)}`, url: `https://wholesomelist.com/list/` });
-
-    media = await db.media.create({
-      data: {
-        slug, title: item.title, titleKey: key,
-        altTitles: item.altTitles,
-        description: details?.description ?? item.description,
-        coverUrl: proxyUrl(details?.coverUrl ?? item.coverUrl),
-        bannerUrl: proxyUrl(details?.bannerUrl ?? item.bannerUrl),
-        accent: accent[0], accent2: accent[1],
-        category: item.category, videoKind: item.videoKind ?? null, format: item.format, status: item.status,
-        year: item.year,
-        rating: details?.score ?? item.score ?? 0,
-        ratingCount: item.popularity ?? 0,
-        popularity: item.popularity,
-        genres: item.genres, tags: item.tags,
-        studio: item.studio, creator: item.creator,
-        ageRating: item.ageRating,
-        contentFlags: item.category === "AV" ? FLAG_AV : FLAG_MEDIA,
-        externalLinks: JSON.stringify(externalLinks),
-        extra: JSON.stringify({ ...extra, sourceProvider: item.providerId, importedFrom: provider.name }),
-      },
-    });
-
-    // ── materialize real content units ──
-    let units: LiveUnits | null = null;
-    if (adapter?.units) {
-      units = await adapter.units(item.externalId).catch((e) => {
-        console.warn(`[import] units failed for ${item.providerId}/${item.externalId}:`, e instanceof Error ? e.message : e);
-        return null;
-      });
-    }
-
-    for (const ep of units?.episodes ?? []) {
-      await db.episode.create({
-        data: {
-          mediaId: media.id, number: ep.number, title: ep.title ?? null,
-          durationSec: ep.durationSec ?? null,
-          thumbnailUrl: proxyUrl(ep.thumbnailUrl ?? null),
-          streamUrl: ep.streamUrl ? `/api/img?u=${encodeURIComponent(ep.streamUrl)}&stream=1` : null,
-          streamType: ep.streamUrl ? "mp4" : "none",
-          summary: ep.summary ?? null,
-          releasedAt: item.year ? new Date(item.year, 0, 7) : null,
-        },
-      });
-    }
-
-    for (const ch of units?.chapters ?? []) {
-      const created = await db.chapter.create({
-        data: {
-          mediaId: media.id, number: ch.number, title: ch.title ?? null,
-          pageCount: ch.pages.length,
-          // lazy resolution for single-page-plan chapters (e.g. manga18fx
-          // chapter pages): /api/chapters/[id] resolves real images on open.
-          sourceProvider: ch.pageKind === "page-url" && ch.pages.length === 1 ? item.providerId : null,
-          sourceUrl: ch.pageKind === "page-url" && ch.pages.length === 1 ? ch.pages[0] : null,
-          releasedAt: item.year ? new Date(item.year, 0, 7) : null,
-        },
-      });
-      // Multi-page viewer-link chapters (e.g. E-Hentai galleries): store each
-      // viewer page — the image proxy resolves final images on demand because
-      // upstream CDN keystamps expire.
-      if (ch.pages.length > 1) {
-        for (let i = 0; i < ch.pages.length; i++) {
-          await db.chapterPage.create({
-            data: {
-              chapterId: created.id, idx: i,
-              imageUrl: proxyUrl(ch.pages[i]) ?? ch.pages[i],
-            },
-          });
-        }
+  const rails: { providerId: string; providerName: string; videoKind: string | null; items: WorkDTO[]; error: string | null }[] = [];
+  await Promise.all(
+    scope.map(async (p) => {
+      const adapter = getLiveAdapter(p.id);
+      try {
+        if (!adapter?.popular) throw new ApiError(501, `${p.name} exposes no popular listing (search-only source)`);
+        assertUsable(p);
+        const items = await cached("rails", `${p.id}:1`, TTL.RAILS, () => adapter.popular!({ page: 1 }));
+        rails.push({
+          providerId: p.id,
+          providerName: p.name,
+          videoKind: p.videoKind,
+          items: dedupeByRef(
+            items.slice(0, 24).map((i) => toWorkDTO(i, { id: p.id, name: p.name, canWatch: p.availability.watch, canRead: p.availability.read, canView: p.availability.view })),
+          ),
+          error: null,
+        });
+      } catch (e) {
+        rails.push({
+          providerId: p.id, providerName: p.name, videoKind: p.videoKind, items: [],
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
-    }
+    }),
+  );
+  return { category, kind: kind ?? null, rails };
+}
 
-    for (const img of units?.images ?? []) {
-      await db.galleryImage.create({
-        data: {
-          mediaId: media.id, idx: 0,
-          imageUrl: proxyUrl(img.url) ?? "",
-          thumbUrl: proxyUrl(img.thumbUrl),
-          width: img.width ?? 800,
-          height: img.height ?? 1200,
-          tags: JSON.stringify((img.tags ?? []).slice(0, 30)),
-        },
-      });
-    }
-  }
+// ─── work details + units — resolved live on demand ───
 
-  const existingLink = await db.providerLink.findUnique({
-    where: { providerId_externalId: { providerId: item.providerId, externalId: item.externalId } },
-  });
-  if (!existingLink) {
-    await db.providerLink.create({
-      data: {
-        mediaId: media.id, providerId: item.providerId,
-        externalId: item.externalId, externalUrl: item.externalUrl,
-      },
+export async function getWork(providerId: string, externalId: string) {
+  const { def, dto, adapter } = await getProviderDTO(providerId);
+
+  const availability = {
+    watch: CAN_WATCH.has(def.id),
+    read: CAN_READ.has(def.id),
+    view: CAN_VIEW.has(def.id),
+  };
+  const mkDTO = (i: Parameters<typeof toWorkDTO>[0]) =>
+    toWorkDTO(i, { id: def.id, name: def.name, canWatch: availability.watch, canRead: availability.read, canView: availability.view });
+
+  let work: WorkDTO | null = null;
+  if (adapter?.details) {
+    assertUsable(dto);
+    work = await cached("details", `${def.id}:${externalId}`, TTL.WORK, () =>
+      adapter.details!(externalId, providerOpts(dto)).then((d) => (d ? mkDTO(d) : null)),
+    ).catch((e) => {
+      if (e instanceof ApiError) throw e;
+      throw new ApiError(502, `${def.name}: ${e instanceof Error ? e.message : String(e)}`);
     });
   }
-  await db.catalogItem.update({ where: { id: item.id }, data: { imported: true } });
+  if (!work) {
+    // Honest minimal fallback for providers without per-item details
+    // (e.g. Moebooru boards): identity + capability only, no invented metadata.
+    work = mkDTO({
+      externalId,
+      title: `Item ${externalId}`,
+      category: def.category,
+      videoKind: PROVIDER_VIDEO_KIND[def.id],
+      externalUrl: adapter ? undefined : null,
+      extra: { minimal: true },
+    });
+  }
 
-  return { slug: media.slug, merged: existingLink !== null };
+  let units: LiveUnits | null = null;
+  if (adapter?.units) {
+    assertUsable(dto);
+    units = await cached("units", `${def.id}:${externalId}`, TTL.WORK, () => adapter.units!(externalId)).catch(() => null);
+  }
+
+  // "Popular on <provider>" rail (replaces the old local recommendations table)
+  let popular: WorkDTO[] = [];
+  if (adapter?.popular) {
+    popular = await cached("rails", `${def.id}:1`, TTL.RAILS, () => adapter.popular!({ page: 1 }))
+      .then((items) => dedupeByRef(items.slice(0, 12).map(mkDTO)).filter((w) => w.ref !== work!.ref))
+      .catch(() => []);
+  }
+
+  return { work, units, popular, provider: { id: def.id, name: def.name, status: dto.status, configRequired: dto.configRequired, availability } };
+}
+
+export async function resolvePages(providerId: string, sourceUrl: string): Promise<{ idx: number; imageUrl: string }[]> {
+  const { def, dto, adapter } = await getProviderDTO(providerId);
+  if (!adapter?.resolveChapter) throw new ApiError(501, `${def.name} does not support on-demand page resolution`);
+  assertUsable(dto);
+  return cached("pages", `${def.id}:${sourceUrl}`, TTL.PAGES, async () => {
+    const images = await adapter.resolveChapter!(sourceUrl);
+    if (!images.length) throw new ApiError(502, `${def.name} returned no pages for this chapter`);
+    return images.map((imageUrl, idx) => ({ idx, imageUrl }));
+  });
 }

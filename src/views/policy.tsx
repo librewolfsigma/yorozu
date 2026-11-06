@@ -50,9 +50,9 @@ const SECTIONS = [
     title: "5. Privacy & wellbeing",
     color: "#3BD47A",
     points: [
-      "No analytics or third-party trackers; all data lives in the local database.",
-      "Wellbeing tooling is first-class: the Site Blocker Plus script offers time limits and cool-down screens.",
-      "Demo content is fictional; covers and reader pages are generated placeholder art containing no explicit media.",
+      "No analytics or third-party trackers; only your own tracking data is stored in the local database.",
+      "Wellbeing tooling is first-class: the tracked userscript directory lists blockers, time-limit and cool-down tools you can audit before adopting.",
+      "Content streams, pages and metadata come live from the providers you install; Yozora hosts nothing and keeps no catalog mirror.",
     ],
   },
 ];

@@ -5,8 +5,7 @@ import { useState } from "react";
 import { Layers, Plus, Trash2, Loader2, X } from "lucide-react";
 import { api, post, del } from "@/lib/client-api";
 import { useAuth } from "@/components/providers";
-import { MediaCard, fromDTO } from "@/components/media/card";
-import { navigate } from "@/hooks/use-hash-route";
+import { RefPoster } from "@/views/library";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,13 +14,23 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import type { MediaDTO } from "@/lib/serialize";
+
+/** Snapshot-only item ref — the work itself lives upstream. */
+interface CollectionItem {
+  provider: string;
+  externalId: string;
+  ref: string;
+  category: string;
+  title: string;
+  coverUrl: string | null;
+  addedAt: string;
+}
 
 interface CollectionsResponse {
   collections: {
-    id: string; name: string; description: string | null; isPublic: boolean;
-    createdAt: string;
-    items: { id: string; addedAt: string; media: MediaDTO }[];
+    id: string; name: string; description: string | null;
+    createdAt: string; cover: string | null;
+    items: CollectionItem[];
   }[];
 }
 
@@ -62,8 +71,8 @@ export default function CollectionsView() {
   });
 
   const removeItem = useMutation({
-    mutationFn: ({ colId, mediaId }: { colId: string; mediaId: string }) =>
-      del(`/api/collections/${colId}/items?mediaId=${mediaId}`),
+    mutationFn: ({ colId, item }: { colId: string; item: CollectionItem }) =>
+      del(`/api/collections/${colId}/items?provider=${encodeURIComponent(item.provider)}&externalId=${encodeURIComponent(item.externalId)}`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["collections"] }),
     onError: (e: Error) => toast.error(e.message),
   });
@@ -116,8 +125,8 @@ export default function CollectionsView() {
             >
               <div className="flex h-24 gap-0.5 overflow-hidden">
                 {c.items.slice(0, 3).map((i) => (
-                   
-                  <img key={i.id} src={i.media.coverUrl ?? ""} alt="" className="h-full flex-1 object-cover" />
+                  // snapshot cover — display cache only
+                  <img key={i.ref} src={i.coverUrl ?? ""} alt="" className="h-full flex-1 object-cover" />
                 ))}
                 {c.items.length === 0 && <div className="flex h-full flex-1 items-center justify-center bg-muted text-xs text-muted-foreground">Empty</div>}
               </div>
@@ -168,14 +177,14 @@ export default function CollectionsView() {
           <p className="text-sm text-muted-foreground">{open?.description}</p>
           <div className="grid max-h-96 grid-cols-3 gap-3 overflow-y-auto pr-1 sm:grid-cols-4">
             {open?.items.map((i) => (
-              <div key={i.id} className="relative">
-                <MediaCard media={fromDTO(i.media)} />
+              <div key={i.ref} className="relative">
+                <RefPoster work={i} />
                 <button
                   className="absolute -right-1.5 -top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-[#EF5B6B] text-white shadow-lg"
-                  aria-label="Remove from collection"
+                  aria-label={`Remove ${i.title} from collection`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    removeItem.mutate({ colId: open.id, mediaId: i.media.id });
+                    removeItem.mutate({ colId: open.id, item: i });
                   }}
                 >
                   <X className="h-3.5 w-3.5" />

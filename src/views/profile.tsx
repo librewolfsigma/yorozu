@@ -1,16 +1,23 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { User, Star, BookOpen, Tv, Image as ImageIcon, Flag, Library } from "lucide-react";
+import { User, Star, BookOpen, Tv, Flag, Library } from "lucide-react";
 import { api } from "@/lib/client-api";
 import { useAuth } from "@/components/providers";
-import { MediaGrid, fromDTO, GridSkeleton } from "@/components/media/card";
-import { LIBRARY_STATUSES, timeAgo, fmtNumber } from "@/lib/category-meta";
-import type { MediaDTO } from "@/lib/serialize";
+import { GridSkeleton } from "@/components/media/card";
+import { LIBRARY_STATUSES, timeAgo } from "@/lib/category-meta";
+import { navigate } from "@/hooks/use-hash-route";
+import { RefPoster } from "@/views/library";
+
+/** Snapshot-only work ref (no media joins — the catalog lives upstream). */
+interface WorkRef {
+  provider: string; externalId: string; ref: string;
+  category: string; title: string; coverUrl: string | null;
+}
 
 interface ProfileData {
-  library: { entries: { status: string; score: number | null; favorite: boolean; media: MediaDTO }[]; counts: Record<string, number> };
-  history: { entries: { action: string; category: string; createdAt: string; titleSnapshot: string | null; mediaSlug: string | null }[] };
+  library: { entries: { status: string; score: number | null; favorite: boolean; work: WorkRef }[]; counts: Record<string, number> };
+  history: { entries: { action: string; category: string; createdAt: string; titleSnapshot: string | null; ref: string | null }[] };
   reports: { id: string; targetType: string; reason: string; status: string; createdAt: string }[];
 }
 
@@ -32,7 +39,7 @@ export default function ProfileView() {
     );
   }
 
-  const favs = (data?.library.entries ?? []).filter((e) => e.favorite).map((e) => e.media);
+  const favs = (data?.library.entries ?? []).filter((e) => e.favorite).map((e) => e.work);
   const readCount = (data?.history.entries ?? []).filter((h) => h.action === "READ").length;
   const watchCount = (data?.history.entries ?? []).filter((h) => h.action === "WATCH").length;
   const scores = (data?.library.entries ?? []).filter((e) => e.score != null);
@@ -44,7 +51,6 @@ export default function ProfileView() {
       <div className="hero-aurora relative overflow-hidden rounded-2xl border border-border card-ring p-6 sm:p-8">
         <div className="relative flex flex-wrap items-center gap-5">
           {user.avatarUrl && (
-             
             <img src={user.avatarUrl} alt="" className="h-20 w-20 rounded-2xl card-ring object-cover" />
           )}
           <div className="min-w-0 flex-1">
@@ -83,7 +89,9 @@ export default function ProfileView() {
       <section className="mt-8">
         <h2 className="mb-3 text-[15px] font-bold">Favorites</h2>
         {isLoading ? <GridSkeleton count={6} /> : favs.length ? (
-          <MediaGrid items={favs.map(fromDTO)} />
+          <div className="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+            {favs.map((w) => <RefPoster key={w.ref} work={w} />)}
+          </div>
         ) : (
           <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
             Heart a title to feature it here.
@@ -95,15 +103,30 @@ export default function ProfileView() {
       <section className="mt-8">
         <h2 className="mb-3 text-[15px] font-bold">Recent activity</h2>
         <div className="space-y-1.5">
-          {(data?.history.entries ?? []).slice(0, 8).map((h) => (
-            <div key={h.createdAt} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3.5 py-2.5 text-[13px]">
-              <p className="min-w-0 truncate">
-                <span className="font-bold">{h.action.toLowerCase()}</span>
-                <span className="text-muted-foreground"> — {h.titleSnapshot ?? h.category.toLowerCase()}</span>
-              </p>
-              <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(h.createdAt)}</span>
-            </div>
-          ))}
+          {(data?.history.entries ?? []).slice(0, 8).map((h) => {
+            const openable = !!h.ref;
+            const open = () => {
+              if (!h.ref) return;
+              const idx = h.ref.indexOf(":");
+              const provider = h.ref.slice(0, idx);
+              const externalId = h.ref.slice(idx + 1);
+              navigate(`/media?p=${encodeURIComponent(provider)}&id=${encodeURIComponent(externalId)}`);
+            };
+            return (
+              <button
+                key={`${h.ref ?? h.category}:${h.createdAt}`}
+                onClick={open}
+                disabled={!openable}
+                className="flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-3.5 py-2.5 text-[13px] transition-colors enabled:hover:bg-white/5 disabled:cursor-default"
+              >
+                <p className="min-w-0 truncate">
+                  <span className="font-bold">{h.action.toLowerCase()}</span>
+                  <span className="text-muted-foreground"> — {h.titleSnapshot ?? h.category.toLowerCase()}</span>
+                </p>
+                <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(h.createdAt)}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
 

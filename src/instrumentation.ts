@@ -1,7 +1,9 @@
-// Next.js instrumentation hook — starts the in-process metadata sync
-// scheduler exactly once per server process (nodejs runtime only).
+// Next.js instrumentation hook.
+//
+// v2 client-first architecture: there is NO background scheduler. Yozora
+// runs no periodic catalog sync, no crosswalk jobs and no import pipelines
+// (docs/CLIENT_ARCHITECTURE.md). Provider health is checked on demand from
+// the Extensions view or before live searches.
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  const { startSyncScheduler } = await import("@/lib/sync");
-  startSyncScheduler();
+  // intentionally empty — Yozora is a client, not a database
 }

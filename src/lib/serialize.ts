@@ -1,52 +1,130 @@
-import type { Media } from "@prisma/client";
+// Client-first DTO serialization — no database entities here.
+// Every WorkDTO is built from a LIVE provider result + static registry info.
+// See docs/CLIENT_ARCHITECTURE.md for the binding contract.
 
-export interface MediaDTO {
-  id: string;
-  slug: string;
+import { accentFor } from "@/lib/content-factory";
+
+export interface WorkDTO {
+  provider: string;
+  providerName: string;
+  externalId: string;
+  ref: string; // "provider:externalId" — dedup/React key
   title: string;
   altTitles: string[];
   description: string | null;
   coverUrl: string | null;
   bannerUrl: string | null;
-  accent: string | null;
-  accent2: string | null;
+  accent: string;
+  accent2: string;
   category: string;
-  videoKind: string | null;
+  videoKind: string | null; // AV | JAV | PMV | HMV | CREATOR — subcategories never merged
   format: string | null;
   status: string | null;
   year: number | null;
-  rating: number;
-  ratingCount: number;
+  rating: number | null;
   popularity: number;
   genres: string[];
   tags: string[];
   studio: string | null;
   creator: string | null;
-  ageRating: string;
-  contentFlags: string[];
+  externalUrl: string | null;
   externalLinks: { label: string; url: string }[];
+  /** In-app capability flags derived honestly from what the adapter implements. */
+  availability: { watch: boolean; read: boolean; view: boolean };
   extra: Record<string, unknown>;
-  createdAt: Date;
 }
 
-export function serializeMedia(m: Media): MediaDTO {
+/** Minimal external-ref identity passed to shared UI components. */
+export interface WorkRefInfo {
+  provider: string;
+  externalId: string;
+  category: string;
+  title: string;
+  coverUrl?: string | null;
+}
+
+/** Minimal input shape a live adapter search item must expose. */
+export interface WorkInput {
+  externalId: string;
+  title: string;
+  altTitles?: string[];
+  description?: string | null;
+  coverUrl?: string | null;
+  bannerUrl?: string | null;
+  category: string;
+  videoKind?: string;
+  format?: string | null;
+  status?: string | null;
+  year?: number | null;
+  score?: number | null;
+  popularity?: number;
+  genres?: string[];
+  tags?: string[];
+  studio?: string | null;
+  creator?: string | null;
+  externalUrl?: string | null;
+  extra?: Record<string, unknown>;
+}
+
+export function workRef(provider: string, externalId: string): string {
+  return `${provider}:${externalId}`;
+}
+
+/**
+ * Build the public DTO from a live adapter item.
+ * `availability` comes from the provider's declared capabilities — the UI
+ * must never offer an in-app action the source cannot actually serve.
+ */
+export function toWorkDTO(
+  item: WorkInput,
+  provider: { id: string; name: string; canWatch: boolean; canRead: boolean; canView: boolean },
+  extraLinks: { label: string; url: string }[] = [],
+): WorkDTO {
+  const [accent, accent2] = accentFor(item.category, `${provider.id}:${item.externalId}`);
+  const externalLinks: { label: string; url: string }[] = [];
+  if (item.externalUrl) externalLinks.push({ label: `Open on ${provider.name}`, url: item.externalUrl });
+  const magnet = item.extra?.magnet;
+  if (typeof magnet === "string") externalLinks.push({ label: "Magnet download (external client)", url: magnet });
+  externalLinks.push(...extraLinks);
+
   return {
-    id: m.id, slug: m.slug, title: m.title,
-    altTitles: JSON.parse(m.altTitles || "[]"),
-    description: m.description,
-    coverUrl: m.coverUrl, bannerUrl: m.bannerUrl,
-    accent: m.accent, accent2: m.accent2,
-    category: m.category, videoKind: m.videoKind, format: m.format, status: m.status, year: m.year,
-    rating: m.rating, ratingCount: m.ratingCount, popularity: m.popularity,
-    genres: JSON.parse(m.genres || "[]"),
-    tags: JSON.parse(m.tags || "[]"),
-    studio: m.studio, creator: m.creator,
-    ageRating: m.ageRating,
-    contentFlags: JSON.parse(m.contentFlags || "[]"),
-    externalLinks: JSON.parse(m.externalLinks || "[]"),
-    extra: JSON.parse(m.extra || "{}"),
-    createdAt: m.createdAt,
+    provider: provider.id,
+    providerName: provider.name,
+    externalId: item.externalId,
+    ref: workRef(provider.id, item.externalId),
+    title: item.title,
+    altTitles: (item.altTitles ?? []).slice(0, 10),
+    description: item.description ?? null,
+    coverUrl: item.coverUrl ?? null,
+    bannerUrl: item.bannerUrl ?? null,
+    accent,
+    accent2,
+    category: item.category,
+    videoKind: item.videoKind ?? null,
+    format: item.format ?? null,
+    status: item.status ?? null,
+    year: item.year ?? null,
+    rating: item.score ?? null,
+    popularity: item.popularity ?? 0,
+    genres: item.genres ?? [],
+    tags: (item.tags ?? []).slice(0, 40),
+    studio: item.studio ?? null,
+    creator: item.creator ?? null,
+    externalUrl: item.externalUrl ?? null,
+    externalLinks,
+    availability: {
+      watch: provider.canWatch,
+      read: provider.canRead,
+      view: provider.canView,
+    },
+    extra: item.extra ?? {},
   };
+}
+
+/** Dedupe a list of DTOs on the external ref (request-time dedup — no local index). */
+export function dedupeByRef(items: WorkDTO[]): WorkDTO[] {
+  const seen = new Set<string>();
+  return items.filter((i) => (seen.has(i.ref) ? false : (seen.add(i.ref), true)));
 }
 
 export function serializeUser(u: {
@@ -60,33 +138,5 @@ export function serializeUser(u: {
     ageVerified: !!u.ageVerifiedAt,
     settings: JSON.parse(u.settings || "{}"),
     createdAt: u.createdAt,
-  };
-}
-
-export function serializeCatalogItem(item: {
-  id: string; providerId: string; externalId: string; title: string;
-  altTitles: string; description: string | null; coverUrl: string | null;
-  bannerUrl: string | null; accent: string | null; category: string;
-  videoKind: string | null;
-  format: string | null; status: string | null; year: number | null;
-  score: number | null; popularity: number; genres: string; tags: string;
-  studio: string | null; creator: string | null; ageRating: string;
-  contentFlags: string; externalUrl: string | null; extra: string;
-  episodesCount: number | null; chaptersCount: number | null;
-  galleryCount: number | null; imported: boolean;
-}) {
-  return {
-    id: item.id, providerId: item.providerId, externalId: item.externalId,
-    title: item.title, altTitles: JSON.parse(item.altTitles) as string[],
-    description: item.description, coverUrl: item.coverUrl, bannerUrl: item.bannerUrl,
-    accent: item.accent, category: item.category, videoKind: item.videoKind, format: item.format,
-    status: item.status, year: item.year, score: item.score,
-    popularity: item.popularity, genres: JSON.parse(item.genres) as string[],
-    tags: JSON.parse(item.tags) as string[], studio: item.studio,
-    creator: item.creator, ageRating: item.ageRating,
-    contentFlags: JSON.parse(item.contentFlags) as string[],
-    externalUrl: item.externalUrl, extra: JSON.parse(item.extra || "{}"),
-    episodesCount: item.episodesCount, chaptersCount: item.chaptersCount,
-    galleryCount: item.galleryCount, imported: item.imported,
   };
 }

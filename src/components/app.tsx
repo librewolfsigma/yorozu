@@ -17,7 +17,6 @@ const GalleryView = lazy(() => import("@/views/gallery"));
 const LibraryView = lazy(() => import("@/views/library"));
 const CollectionsView = lazy(() => import("@/views/collections"));
 const HistoryView = lazy(() => import("@/views/history"));
-const DownloadsView = lazy(() => import("@/views/downloads"));
 const ExtensionsView = lazy(() => import("@/views/extensions"));
 const ScriptsView = lazy(() => import("@/views/scripts"));
 const DatabasesView = lazy(() => import("@/views/databases"));
@@ -37,23 +36,28 @@ function ViewFallback() {
 function Router() {
   const { route } = useHashRoute();
   const seg = route.segments;
-  const [head, a, b] = seg;
+  const [head, a] = seg;
+  const q = route.query;
+
+  // External refs travel in the query string, URL-encoded:
+  // #/media?p=&id= · #/read?p=&id=&ch= · #/watch?p=&id=&ep= · #/gallery?p=&id=
+  const provider = q.get("p");
+  const id = q.get("id");
 
   // full-bleed views manage their own chrome
   const fullBleed = head === "read" || head === "watch" || head === "gallery";
 
   let view: React.ReactNode;
   if (!head) view = <HomeView />;
-  else if (head === "browse") view = <BrowseView category={a} query={route.query} />;
-  else if (head === "search") view = <SearchView query={route.query} />;
-  else if (head === "media") view = <DetailView slug={a} />;
-  else if (head === "read") view = <ReaderView slug={a} chapterId={b} />;
-  else if (head === "watch") view = <WatchView slug={a} episodeId={b} />;
-  else if (head === "gallery") view = <GalleryView slug={a} />;
+  else if (head === "browse") view = <BrowseView category={a} query={q} />;
+  else if (head === "search") view = <SearchView query={q} />;
+  else if (head === "media") view = <DetailView provider={provider} id={id} />;
+  else if (head === "read") view = <ReaderView provider={provider} id={id} chapterKey={q.get("ch")} />;
+  else if (head === "watch") view = <WatchView provider={provider} id={id} episodeKey={q.get("ep")} />;
+  else if (head === "gallery") view = <GalleryView provider={provider} id={id} />;
   else if (head === "library") view = <LibraryView />;
   else if (head === "collections") view = <CollectionsView />;
   else if (head === "history") view = <HistoryView />;
-  else if (head === "downloads") view = <DownloadsView />;
   else if (head === "extensions") view = <ExtensionsView />;
   else if (head === "scripts") view = <ScriptsView />;
   else if (head === "databases") view = <DatabasesView />;
