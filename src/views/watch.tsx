@@ -221,7 +221,7 @@ export default function WatchView({ slug, episodeId }: { slug?: string; episodeI
               {user && (
                 <button
                   className="text-xs font-semibold text-muted-foreground hover:text-foreground"
-                  onClick={() => sync.mutate({ positionSec: Math.floor(position), completed: true }).then(() => toast.success("Marked as watched"))}
+                  onClick={() => void sync.mutateAsync({ positionSec: Math.floor(position), completed: true }).then(() => toast.success("Marked as watched"))}
                 >
                   Mark as watched
                 </button>

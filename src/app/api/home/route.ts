@@ -3,29 +3,57 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { handle } from "@/lib/api-utils";
 import { serializeMedia } from "@/lib/serialize";
+import { discoverCategory, importLightweight } from "@/lib/providers/engine";
 
-// Aggregate payload for the home view: hero, continue, trending rows, spotlight.
+// Aggregate payload for the home view — built from LIVE provider data.
+// Discovery pulls real "popular" listings from installed providers; the top
+// items are materialized into unified Media (lightweight import) so cards
+// have real slugs and the hero can use real cover art. No fictional titles.
 export async function GET() {
   return handle(async () => {
     const user = await getCurrentUser();
 
-    const hero = await db.media.findMany({
-      where: { bannerUrl: { not: null } },
-      orderBy: { popularity: "desc" },
-      take: 6,
-    });
+    const RAIL_CATEGORIES = ["ANIME", "MANGA", "ILLUSTRATION", "MANHWA", "AV", "GAME"];
+    const discoveries = await Promise.all(
+      RAIL_CATEGORIES.map((c) =>
+        discoverCategory(c).catch(() => ({ category: c, rails: [] })),
+      ),
+    );
 
-    const popular = await db.media.findMany({
-      orderBy: { popularity: "desc" },
-      take: 18,
-    });
-
+    // Materialize the top items of each rail as unified Media (lightweight).
     const categories: Record<string, unknown[]> = {};
-    for (const cat of ["ANIME", "MANGA", "MANHWA", "ILLUSTRATION", "AV", "GAME"]) {
-      categories[cat] = (
-        await db.media.findMany({ where: { category: cat }, orderBy: { popularity: "desc" }, take: 12 })
-      ).map(serializeMedia);
+    for (const d of discoveries) {
+      const merged: { slug: string; providerName: string }[] = [];
+      const seen = new Set<string>();
+      for (const rail of d.rails) {
+        for (const item of rail.items.slice(0, 10)) {
+          const key = item.title.toLowerCase().slice(0, 120);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          try {
+            const media = await importLightweight(item.id);
+            if (media) merged.push({ slug: media.slug, providerName: rail.providerName });
+          } catch {
+            // one bad row never breaks the rail
+          }
+        }
+      }
+      // hydrate DTOs in popularity order
+      const slugs = merged.map((m) => m.slug);
+      if (slugs.length) {
+        const rows = await db.media.findMany({ where: { slug: { in: slugs } }, orderBy: { popularity: "desc" } });
+        categories[d.category] = rows.slice(0, 14).map(serializeMedia);
+      } else {
+        categories[d.category] = [];
+      }
     }
+
+    // Hero: prefer items with real banners (AniList) else covers.
+    const heroPool = await db.media.findMany({
+      where: { OR: [{ bannerUrl: { not: null } }, { coverUrl: { not: null } }] },
+      orderBy: { popularity: "desc" },
+      take: 8,
+    });
 
     let continue_: unknown[] = [];
     if (user) {
@@ -35,20 +63,9 @@ export async function GET() {
         take: 8,
         include: { media: true },
       });
-      const recentCompleted = await db.progress.findMany({
-        where: { userId: user.id, completed: true },
-        orderBy: { updatedAt: "desc" },
-        take: 4,
-        include: { media: true },
-      });
       const seen = new Set<string>();
-      continue_ = [...rows, ...recentCompleted]
-        .filter((r) => {
-          if (seen.has(r.mediaId)) return false;
-          seen.add(r.mediaId);
-          return true;
-        })
-        .slice(0, 8)
+      continue_ = rows
+        .filter((r) => (seen.has(r.mediaId) ? false : (seen.add(r.mediaId), true)))
         .map((r) => ({
           media: serializeMedia(r.media),
           kind: r.kind,
@@ -69,8 +86,8 @@ export async function GET() {
     };
 
     return NextResponse.json({
-      hero: hero.map(serializeMedia),
-      popular: popular.map(serializeMedia),
+      hero: heroPool.map(serializeMedia),
+      popular: heroPool.map(serializeMedia),
       categories,
       continue: continue_,
       stats,

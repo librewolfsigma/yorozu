@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
     const body = await readJson<{ action?: string; mediaId?: string; category?: string; detail?: Record<string, unknown>; titleSnapshot?: string; coverSnapshot?: string }>(req);
     if (!body.action) throw new ApiError(400, "action is required");
     let mediaId = body.mediaId ?? null;
-    let { titleSnapshot, coverSnapshot, category } = body;
+    let titleSnapshot: string | null | undefined = body.titleSnapshot;
+    let coverSnapshot: string | null | undefined = body.coverSnapshot;
+    let category: string | null | undefined = body.category;
     if (mediaId) {
       const media = await db.media.findUnique({ where: { id: mediaId } });
       if (media) {

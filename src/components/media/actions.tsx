@@ -271,16 +271,24 @@ export function ReportDialog({ targetType, targetId }: { targetType: string; tar
   );
 }
 
-export function DownloadButton({ mediaId, label, kind, sizeBytes, hub }: {
-  mediaId: string; label: string; kind: string; sizeBytes?: number; hub: string;
+export function DownloadButton({ mediaId, label, kind, hub }: {
+  mediaId: string; label: string; kind: string; hub: string;
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const mutation = useMutation({
-    mutationFn: () => post("/api/downloads", { mediaId, label, kind, sizeBytes }),
-    onSuccess: () => {
-      toast.success("Download queued", { description: `${label} — track it in Downloads.` });
+    mutationFn: () =>
+      post<{ download: { id: string; fileUrl: string } }>("/api/downloads", { mediaId, label, kind }),
+    onSuccess: (data) => {
+      toast.success("Download started", { description: `${label} — streaming the real file to your browser.` });
       void qc.invalidateQueries({ queryKey: ["downloads"] });
+      // The fileUrl streams the actual bytes with Content-Disposition: attachment.
+      const anchor = document.createElement("a");
+      anchor.href = data.download.fileUrl;
+      anchor.download = "";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
     },
     onError: (e: Error) => {
       if (e.message.includes("Sign in")) {

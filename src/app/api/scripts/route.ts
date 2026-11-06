@@ -3,16 +3,26 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { handle, readJson, ApiError } from "@/lib/api-utils";
 import { serializeCatalogItem } from "@/lib/serialize";
+import { discoverCategory } from "@/lib/providers/engine";
 
-// Userscript/extension catalog + per-user installs.
-// The platform tracks installs and permissions but NEVER executes third-party code.
+// Userscript/tool catalog + per-user installs.
+// Entries come LIVE from the Wotaku directory provider (real names, real
+// URLs). The platform tracks installs and permissions but NEVER executes
+// third-party code.
 export async function GET() {
   return handle(async () => {
     const user = await getCurrentUser();
+    // hydrate from the live provider when the local cache is empty
+    let count = await db.catalogItem.count({ where: { category: "SCRIPT" } });
+    if (count === 0) {
+      await discoverCategory("SCRIPT").catch(() => null);
+      count = await db.catalogItem.count({ where: { category: "SCRIPT" } });
+    }
     const scripts = await db.catalogItem.findMany({
       where: { category: "SCRIPT" },
       include: { provider: { select: { id: true, name: true, installed: true, status: true } } },
       orderBy: { popularity: "desc" },
+      take: 60,
     });
     const installs = user
       ? await db.scriptInstall.findMany({ where: { userId: user.id } })

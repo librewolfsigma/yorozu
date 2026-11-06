@@ -31,12 +31,12 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ slug: stri
     });
 
     const user = await getCurrentUser();
-    let library = null;
+    let libraryState: { status: string; progress: number; score: number | null; favorite: boolean; notes: string | null } | null = null;
     if (user) {
       const entry = await db.libraryEntry.findUnique({
         where: { userId_mediaId: { userId: user.id, mediaId: media.id } },
       });
-      library = entry ? { status: entry.status, progress: entry.progress, score: entry.score, favorite: entry.favorite, notes: entry.notes } : null;
+      libraryState = entry ? { status: entry.status, progress: entry.progress, score: entry.score, favorite: entry.favorite, notes: entry.notes } : null;
     }
 
     const providers = await db.provider.findMany({
@@ -85,7 +85,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ slug: stri
       })),
       providers,
       related: candidates.map(serializeMedia),
-      library,
+      library: libraryState,
       myCollections: collections.map((c) => ({ id: c.id, name: c.name, hasItem: c.items.length > 0 })),
     });
   });

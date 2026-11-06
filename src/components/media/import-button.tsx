@@ -24,15 +24,14 @@ export function ImportButton({
     onSuccess: (data) => {
       setMerged(true);
       void qc.invalidateQueries();
-      toast({
-        title: data.merged ? "Merged with existing entry" : "Imported to database",
+      toast.success(data.merged ? "Merged with existing entry" : "Imported to database", {
         description: data.merged
           ? "Duplicate detected — provider linked to the unified title."
           : "The title is now searchable platform-wide.",
       });
       onImported?.(data.slug);
     },
-    onError: (e: Error) => toast({ title: "Import failed", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast.error("Import failed", { description: e.message }),
   });
 
   if (imported) {

@@ -30,11 +30,13 @@ interface ProviderRow {
   capabilities: string[]; configSchema: { key: string; label: string; type: string; required?: boolean; options?: string[]; help?: string }[];
   config: Record<string, unknown>; status: string; lastError: string | null;
   lastCheckedAt: string | null; installedAt: string; itemCount: number;
+  live: boolean; integration: string | null;
 }
 interface RepositoryRow {
   id: string; name: string; category: string; description: string;
   version: string; author: string; homepage: string;
   capabilities: string[]; configSchema: unknown[];
+  live: boolean; integration: string | null;
 }
 
 export default function ExtensionsView() {
@@ -43,6 +45,14 @@ export default function ExtensionsView() {
   const [healthBusy, setHealthBusy] = useState<string | null>(null);
   const [configFor, setConfigFor] = useState<ProviderRow | null>(null);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpanded = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const { data, isLoading } = useQuery({
     queryKey: ["providers"],
@@ -125,9 +135,9 @@ export default function ExtensionsView() {
 
       <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#3DB4F2]/25 bg-[#3DB4F2]/10 p-3 text-xs leading-relaxed text-foreground/85">
         <span className="font-bold text-[#3DB4F2]">How it works:</span>
-        Each provider is an independent adapter with its own capabilities, configuration and health
-        status. One broken provider never breaks the platform — failed checks are isolated, and
-        unified database entries survive uninstalls. Catalog items appear under
+        Every installed provider is a live adapter hitting its upstream API or site — health checks are real requests and
+        any error shown is the provider&apos;s own response. One broken provider never breaks the platform — failed checks are
+        isolated, and unified database entries survive uninstalls. Catalog items appear under
         <button className="mx-1 underline" onClick={() => navigate("/browse/ANIME")}>Browse</button>
         only after import (duplicate-safe).
       </div>
@@ -152,6 +162,11 @@ export default function ExtensionsView() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-[14px] font-bold">{p.name}</p>
+                        {p.live && p.status === "ACTIVE" && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#3BD47A]/15 px-2 py-0.5 text-[10px] font-bold text-[#3BD47A]">
+                            <span className="yz-pulse-dot h-1.5 w-1.5 rounded-full bg-[#3BD47A]" /> Live
+                          </span>
+                        )}
                         <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${meta.hub}1a`, color: meta.hub }}>
                           {meta.label}
                         </span>
@@ -159,6 +174,20 @@ export default function ExtensionsView() {
                         <StatusChip status={p.status} lastError={p.lastError} />
                       </div>
                       <p className="mt-1 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">{p.description}</p>
+                      {p.integration && (
+                        <div className="mt-1.5">
+                          <p className={cn("text-[11.5px] leading-relaxed text-muted-foreground/80", !expanded.has(p.id) && "line-clamp-1")}>
+                            <span className="font-semibold text-muted-foreground">Integration:</span> {p.integration}
+                          </p>
+                          <button
+                            className="mt-0.5 text-[11px] font-semibold text-muted-foreground/70 underline-offset-2 hover:text-foreground hover:underline"
+                            aria-expanded={expanded.has(p.id)}
+                            onClick={() => toggleExpanded(p.id)}
+                          >
+                            {expanded.has(p.id) ? "Show less" : "Show more"}
+                          </button>
+                        </div>
+                      )}
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {p.capabilities.map((c) => (
                           <Badge key={c} variant="secondary" className="rounded-md bg-muted font-mono text-[10px]">{c}</Badge>
@@ -263,6 +292,16 @@ export default function ExtensionsView() {
         <DialogContent className="max-w-sm rounded-2xl border-border bg-card" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Configure {configFor?.name}</DialogTitle>
+            {configFor?.integration && (
+              <p className="rounded-lg border border-border bg-background/50 p-2.5 text-[11.5px] leading-relaxed text-muted-foreground">
+                <span className="font-semibold text-foreground/80">How this integration works:</span> {configFor.integration}
+              </p>
+            )}
+            {configFor?.lastError && (
+              <p className="flex items-start gap-1.5 rounded-lg border border-[#EF5B6B]/25 bg-[#EF5B6B]/10 p-2 text-xs text-[#FF8B96]">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {configFor.lastError}
+              </p>
+            )}
           </DialogHeader>
           <div className="space-y-3">
             {(configFor?.configSchema ?? []).map((f) => (

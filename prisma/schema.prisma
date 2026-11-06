@@ -189,15 +189,17 @@ model Episode {
 }
 
 model Chapter {
-  id         String   @id @default(cuid())
-  mediaId    String
-  media      Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
-  number     Float
-  title      String?
-  volume     Float?
-  pageCount  Int
-  releasedAt DateTime?
-  pages      ChapterPage[]
+  id             String   @id @default(cuid())
+  mediaId        String
+  media          Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  number         Float
+  title          String?
+  volume         Float?
+  pageCount      Int
+  releasedAt     DateTime?
+  sourceProvider String? // live provider id when pages resolve lazily (e.g. ehentai)
+  sourceUrl      String? // upstream chapter/gallery URL for lazy resolution
+  pages          ChapterPage[]
 
   @@index([mediaId])
 }

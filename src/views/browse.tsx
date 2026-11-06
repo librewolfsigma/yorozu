@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { SlidersHorizontal, X, Search, PackageOpen } from "lucide-react";
-import { api } from "@/lib/client-api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  SlidersHorizontal, X, Search, PackageOpen, Plus, Check, Loader2,
+  AlertTriangle, Radio, Star,
+} from "lucide-react";
+import { api, post } from "@/lib/client-api";
 import { categoryMeta } from "@/lib/category-meta";
 import { MediaGrid, GridSkeleton, fromDTO } from "@/components/media/card";
 import type { MediaDTO } from "@/lib/serialize";
+import { navigate } from "@/hooks/use-hash-route";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -23,6 +28,25 @@ interface BrowseResponse {
   page: number;
   pageSize: number;
   facets: { genres: { name: string; count: number }[]; years: number[] } | null;
+}
+
+// Catalog item as returned by GET /api/discover/[category] — no slug yet;
+// importing creates the unified Media row and returns its slug.
+interface CatalogItem {
+  id: string; providerId: string; externalId: string; title: string;
+  description: string | null; coverUrl: string | null; bannerUrl: string | null;
+  accent: string | null; category: string; format: string | null;
+  status: string | null; year: number | null; score: number | null;
+  popularity: number; genres: string[]; tags: string[];
+  studio: string | null; creator: string | null;
+  externalUrl: string | null; extra: Record<string, unknown>;
+  episodesCount: number | null; chaptersCount: number | null;
+  galleryCount: number | null; imported: boolean;
+}
+
+interface DiscoverResponse {
+  category: string;
+  rails: { providerId: string; providerName: string; items: CatalogItem[]; error?: string }[];
 }
 
 const SORTS = [
@@ -80,6 +104,14 @@ export default function BrowseView({ category, query }: { category?: string; que
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["browse", params],
     queryFn: () => api<BrowseResponse>(`/api/media?${params}`),
+  });
+
+  // Live discover rails: real "popular" listings pulled from every installed
+  // provider in this category. Kept separate from the local database rows below.
+  const discover = useQuery({
+    queryKey: ["discover", category],
+    queryFn: () => api<DiscoverResponse>(`/api/discover/${category}`),
+    enabled: !!category,
   });
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
@@ -209,6 +241,40 @@ export default function BrowseView({ category, query }: { category?: string; que
         </div>
       )}
 
+      {/* live discover rails */}
+      {category && (discover.isError ? (
+        <p className="mb-6 rounded-lg border border-[#EF5B6B]/25 bg-[#EF5B6B]/10 p-2.5 text-xs text-[#FF8B96]">
+          Live rails unavailable right now — {(discover.error as Error).message}
+        </p>
+      ) : discover.isLoading ? (
+        <RailSkeleton />
+      ) : (discover.data?.rails.length ?? 0) > 0 && (
+        <div className="mb-8 space-y-6">
+          {discover.data!.rails.map((rail) => (
+            <section key={rail.providerId} aria-label={`Live from ${rail.providerName}`}>
+              <h2 className="mb-2 flex items-center gap-2 text-[15px] font-bold">
+                <Radio className="h-4 w-4" style={{ color: meta.hub }} />
+                Live from {rail.providerName}
+              </h2>
+              {rail.error ? (
+                <p className="flex items-start gap-1.5 rounded-lg border border-[#EF5B6B]/25 bg-[#EF5B6B]/10 p-2.5 text-xs text-[#FF8B96]">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span><span className="font-semibold">{rail.providerName} failed:</span> {rail.error}</span>
+                </p>
+              ) : rail.items.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No items returned right now.</p>
+              ) : (
+                <div className="no-scrollbar -mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1">
+                  {rail.items.map((item) => (
+                    <LiveCatalogCard key={item.id} item={item} hub={meta.hub} />
+                  ))}
+                </div>
+              )}
+            </section>
+          ))}
+        </div>
+      ))}
+
       {/* results */}
       {isLoading ? (
         <GridSkeleton count={18} />
@@ -238,6 +304,147 @@ export default function BrowseView({ category, query }: { category?: string; que
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// Poster card for a live catalog item. There is no slug yet, so clicking the
+// card imports it (POST /api/media/import) and then navigates to the unified
+// detail page. Already-imported items show a check badge and open the source.
+function LiveCatalogCard({ item, hub }: { item: CatalogItem; hub: string }) {
+  const qc = useQueryClient();
+  const [merged, setMerged] = useState(false);
+  const isImported = item.imported || merged;
+  const accent = item.accent ?? hub;
+  const sub = [item.year, item.format].filter(Boolean).join(" · ");
+
+  const importMut = useMutation({
+    mutationFn: () => post<{ slug: string; merged: boolean }>("/api/media/import", { catalogItemId: item.id }),
+    onSuccess: (data) => {
+      setMerged(true);
+      void qc.invalidateQueries({ queryKey: ["discover"] });
+      void qc.invalidateQueries({ queryKey: ["browse"] });
+      toast.success(data.merged ? "Merged with existing entry" : "Imported to database", {
+        description: data.merged
+          ? "Duplicate detected — opening the unified title."
+          : `${item.title} is now in the unified database.`,
+      });
+      navigate(`/media/${data.slug}`);
+    },
+    onError: (e: Error) => toast.error("Import failed", { description: e.message }),
+  });
+
+  const open = () => {
+    if (importMut.isPending) return;
+    if (isImported) {
+      // Already in the database — we have no slug here, so send the user to the
+      // provider's own page instead of navigating to /media/undefined.
+      if (item.externalUrl) window.open(item.externalUrl, "_blank", "noopener");
+      return;
+    }
+    importMut.mutate();
+  };
+
+  return (
+    <div
+      className="poster-card group w-[138px] shrink-0 cursor-pointer select-none snap-start"
+      onClick={open}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && open()}
+      aria-label={isImported ? `${item.title} — imported, open source page` : `Import ${item.title}`}
+    >
+      <div
+        className="relative aspect-[2/3] overflow-hidden rounded-xl card-ring bg-[#141B30]"
+        style={{ ["--hub" as string]: accent }}
+      >
+        {item.coverUrl ? (
+          <img
+            src={item.coverUrl}
+            alt={`${item.title} cover`}
+            loading="lazy"
+            className="poster-img h-full w-full object-cover"
+          />
+        ) : (
+          <div className="h-full w-full bg-muted" />
+        )}
+
+        {/* import loading state */}
+        {importMut.isPending && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1.5 bg-black/60 backdrop-blur-[2px]">
+            <Loader2 className="h-6 w-6 animate-spin text-white" />
+            <span className="text-[10px] font-bold uppercase tracking-wide text-white/90">Importing…</span>
+          </div>
+        )}
+
+        {/* score badge */}
+        {item.score != null && item.score > 0 && (
+          <div className="absolute left-1.5 top-1.5 z-10 inline-flex items-center gap-1 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-bold text-[#FFBE4A] backdrop-blur-sm">
+            <Star className="h-3 w-3 fill-[#FFBE4A]" /> {item.score.toFixed(1)}
+          </div>
+        )}
+
+        {/* imported check badge */}
+        {isImported && (
+          <span
+            className="absolute bottom-1.5 left-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-[#3BD47A] text-black shadow"
+            aria-label="Imported"
+          >
+            <Check className="h-3.5 w-3.5" />
+          </span>
+        )}
+
+        {/* hover overlay */}
+        {!isImported && !importMut.isPending && (
+          <div className="absolute inset-0 z-[5] flex items-center justify-center bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-full"
+              style={{ background: accent, color: "#04121E" }}
+            >
+              <Plus className="h-5 w-5" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-2 px-0.5">
+        <p className="line-clamp-1 text-[12.5px] font-semibold text-foreground/90 group-hover:text-white transition-colors">
+          {item.title}
+        </p>
+        <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{sub || "\u00A0"}</p>
+        {isImported ? (
+          <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#3BD47A]">
+            <Check className="h-3 w-3" /> In database
+          </span>
+        ) : (
+          <button
+            className="press-scale mt-1 inline-flex items-center gap-1 text-[11px] font-semibold disabled:opacity-60"
+            style={{ color: accent }}
+            aria-label={`Import ${item.title} into the database`}
+            disabled={importMut.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              open();
+            }}
+          >
+            <Plus className="h-3 w-3" /> Import
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RailSkeleton() {
+  return (
+    <div className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="w-[138px] shrink-0">
+          <div className="yz-skeleton aspect-[2/3] rounded-xl" />
+          <div className="yz-skeleton mt-2 h-3 w-4/5 rounded" />
+          <div className="yz-skeleton mt-1.5 h-3 w-1/2 rounded" />
+        </div>
+      ))}
     </div>
   );
 }

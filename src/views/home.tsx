@@ -50,7 +50,7 @@ export default function HomeView() {
         <section className="hero-aurora relative overflow-hidden rounded-2xl border border-border card-ring-lg">
           { }
           <img
-            src={HERO_IMAGES[heroIdx % HERO_IMAGES.length]}
+            src={hero.bannerUrl || hero.coverUrl || HERO_IMAGES[heroIdx % HERO_IMAGES.length]}
             alt=""
             className="absolute inset-0 h-full w-full object-cover opacity-40"
           />

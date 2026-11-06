@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
     }
 
     // available filter values (for the filter bar) — only on page 1 without heavy filters
-    let facets = null;
+    let facets: { genres: { name: string; count: number }[]; years: number[] } | null = null;
     if (page === 1 && !q) {
       const cats = category ? [category] : CATEGORIES;
       const genreRows = await db.media.findMany({

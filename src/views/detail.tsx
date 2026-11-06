@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   Play, BookOpen, Image as ImageIcon, Gamepad2, Info, Users, Star, ShieldAlert,
-  FileCode2, ExternalLink, FolderHeart, PlayCircle, MessagesSquare, LayoutGrid, FileDown,
+  FileCode2, ExternalLink, FolderHeart, PlayCircle, MessagesSquare, LayoutGrid, FileDown, Puzzle,
 } from "lucide-react";
 import { api } from "@/lib/client-api";
 import { categoryMeta, fmtDuration, STATUS_LABELS, fmtNumber } from "@/lib/category-meta";
@@ -87,8 +87,16 @@ export default function DetailView({ slug }: { slug?: string }) {
   const firstUnitHref =
     unitsTab === "episodes" ? (data.episodes[0] ? `/watch/${media.slug}/${data.episodes[0].id}` : null)
     : unitsTab === "chapters" ? (data.chapters[0] ? `/read/${media.slug}/${data.chapters[0].id}` : null)
-    : unitsTab === "gallery" ? `/gallery/${media.slug}`
+    : unitsTab === "gallery" ? (data.gallery.length > 0 ? `/gallery/${media.slug}` : null)
     : null;
+
+  // resolve a friendly provider name for the "via …" chip
+  const importedFrom = typeof media.extra.importedFrom === "string" ? media.extra.importedFrom : null;
+  const viaProvider =
+    (importedFrom
+      ? data.providers.find((p) => p.id === importedFrom || p.name === importedFrom)?.name ?? importedFrom
+      : null)
+    ?? (data.providers.length > 0 ? data.providers.map((p) => p.name).join(" · ") : null);
 
   return (
     <div className="-mx-4 lg:-mx-5" style={{ ["--hub" as string]: hub }}>
@@ -123,6 +131,14 @@ export default function DetailView({ slug }: { slug?: string }) {
               {media.format && <span className="text-xs text-muted-foreground">{media.format}</span>}
               {media.status && <span className="text-xs font-semibold" style={{ color: hub }}>{STATUS_LABELS[media.status] ?? media.status}</span>}
               {media.year && <span className="text-xs text-muted-foreground">· {media.year}</span>}
+              {viaProvider && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground"
+                  title={`Imported from ${viaProvider}`}
+                >
+                  <Puzzle className="h-3 w-3" style={{ color: hub }} /> via {viaProvider}
+                </span>
+              )}
             </div>
 
             <h1 className="mt-2.5 font-display text-3xl leading-tight text-white sm:text-4xl lg:text-5xl">{media.title}</h1>
@@ -158,10 +174,17 @@ export default function DetailView({ slug }: { slug?: string }) {
                 >
                   <Play className="h-4.5 w-4.5 fill-current" /> {resumeLabel}
                 </button>
-              ) : (
-                <a href={firstUnitHref ?? (media.externalLinks[0]?.url || "#")} target={firstUnitHref ? undefined : "_blank"} rel="noreferrer" className="flex h-12 items-center gap-2 rounded-2xl cta-gradient px-7 text-[15px] font-bold">
+              ) : media.externalLinks.length > 0 ? (
+                <a href={media.externalLinks[0].url} target="_blank" rel="noopener noreferrer nofollow" className="flex h-12 items-center gap-2 rounded-2xl cta-gradient px-7 text-[15px] font-bold">
                   <ExternalLink className="h-4.5 w-4.5" /> Open resource
                 </a>
+              ) : (
+                <button
+                  onClick={() => navigate("/extensions")}
+                  className="flex h-12 items-center gap-2 rounded-2xl cta-gradient px-7 text-[15px] font-bold"
+                >
+                  <Puzzle className="h-4.5 w-4.5" /> Get from a provider
+                </button>
               )}
               <AddToLibraryButton mediaId={media.id} library={data.library} hub={hub} />
               <FavoriteButton mediaId={media.id} favorite={data.library?.favorite ?? false} hub={hub} />
@@ -192,20 +215,26 @@ export default function DetailView({ slug }: { slug?: string }) {
         <Tabs value={tab} onValueChange={setTab} className="mt-2">
           <TabsList className="mb-5 flex-wrap gap-1 rounded-xl bg-card p-1">
             <TabsTrigger value="overview" className="gap-1.5 rounded-lg"><Info className="h-3.5 w-3.5" /> Overview</TabsTrigger>
-            {unitsTab === "episodes" && <TabsTrigger value="episodes" className="gap-1.5 rounded-lg"><PlayCircle className="h-3.5 w-3.5" /> Episodes ({data.episodes.length})</TabsTrigger>}
-            {unitsTab === "chapters" && <TabsTrigger value="chapters" className="gap-1.5 rounded-lg"><BookOpen className="h-3.5 w-3.5" /> Chapters ({data.chapters.length})</TabsTrigger>}
-            {unitsTab === "gallery" && <TabsTrigger value="gallery" className="gap-1.5 rounded-lg"><ImageIcon className="h-3.5 w-3.5" /> Gallery ({data.gallery.length})</TabsTrigger>}
+            {unitsTab === "episodes" && data.episodes.length > 0 && <TabsTrigger value="episodes" className="gap-1.5 rounded-lg"><PlayCircle className="h-3.5 w-3.5" /> Episodes ({data.episodes.length})</TabsTrigger>}
+            {unitsTab === "chapters" && data.chapters.length > 0 && <TabsTrigger value="chapters" className="gap-1.5 rounded-lg"><BookOpen className="h-3.5 w-3.5" /> Chapters ({data.chapters.length})</TabsTrigger>}
+            {unitsTab === "gallery" && data.gallery.length > 0 && <TabsTrigger value="gallery" className="gap-1.5 rounded-lg"><ImageIcon className="h-3.5 w-3.5" /> Gallery ({data.gallery.length})</TabsTrigger>}
             {unitsTab === "files" && <TabsTrigger value="files" className="gap-1.5 rounded-lg"><FileDown className="h-3.5 w-3.5" /> Files & install</TabsTrigger>}
-            <TabsTrigger value="characters" className="gap-1.5 rounded-lg"><Users className="h-3.5 w-3.5" /> Characters ({data.characters.length})</TabsTrigger>
+            {(data.characters.length > 0 || data.people.length > 0) && <TabsTrigger value="characters" className="gap-1.5 rounded-lg"><Users className="h-3.5 w-3.5" /> Characters ({data.characters.length})</TabsTrigger>}
             <TabsTrigger value="reviews" className="gap-1.5 rounded-lg"><MessagesSquare className="h-3.5 w-3.5" /> Reviews ({data.reviews.length})</TabsTrigger>
             <TabsTrigger value="related" className="gap-1.5 rounded-lg"><LayoutGrid className="h-3.5 w-3.5" /> Related</TabsTrigger>
           </TabsList>
         </Tabs>
 
         {tab === "overview" && <Overview data={data} hub={hub} />}
-        {tab === "episodes" && <EpisodeList data={data} hub={hub} />}
-        {tab === "chapters" && <ChapterList data={data} hub={hub} />}
-        {tab === "gallery" && <GalleryPreview slug={media.slug} hub={hub} count={data.gallery.length} />}
+        {tab === "episodes" && (data.episodes.length > 0
+          ? <EpisodeList data={data} hub={hub} />
+          : <p className="py-8 text-center text-sm text-muted-foreground">No episodes were imported for this title yet.</p>)}
+        {tab === "chapters" && (data.chapters.length > 0
+          ? <ChapterList data={data} hub={hub} />
+          : <p className="py-8 text-center text-sm text-muted-foreground">No chapters were imported for this title yet.</p>)}
+        {tab === "gallery" && (data.gallery.length > 0
+          ? <GalleryPreview slug={media.slug} hub={hub} count={data.gallery.length} />
+          : <p className="py-8 text-center text-sm text-muted-foreground">No gallery images were imported for this title yet.</p>)}
         {tab === "files" && <FilesPanel data={data} hub={hub} />}
         {tab === "characters" && <Characters people={data.people} characters={data.characters} />}
         {tab === "reviews" && (
@@ -232,9 +261,15 @@ function Overview({ data, hub }: { data: DetailData; hub: string }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
       <div className="space-y-5">
+        {/* honest guidance when nothing playable was imported */}
+        {data.episodes.length === 0 && data.chapters.length === 0 && data.gallery.length === 0 && (
+          <HowToWatch data={data} hub={hub} />
+        )}
         <div>
           <h3 className="mb-2 text-[15px] font-bold">Synopsis</h3>
-          <p className="text-[14px] leading-relaxed text-foreground/85">{media.description}</p>
+          <p className="text-[14px] leading-relaxed text-foreground/85">
+            {media.description ?? "No synopsis has been imported for this title yet — open one of the provider links to read it at the source."}
+          </p>
         </div>
 
         {/* category-specific blocks */}
@@ -337,6 +372,46 @@ function Meta({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Metadata-only import: no episodes / chapters / gallery — point people at the
+// real provider links instead of pretending there is something to play.
+function HowToWatch({ data, hub }: { data: DetailData; hub: string }) {
+  const { media } = data;
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <h3 className="flex items-center gap-2 text-[15px] font-bold">
+        <ExternalLink className="h-4 w-4" style={{ color: hub }} /> How to watch/read this
+      </h3>
+      {media.externalLinks.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {media.externalLinks.map((l) => (
+            <a
+              key={l.url}
+              href={l.url}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              aria-label={`${l.label} (opens in a new tab)`}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-[13px] font-bold transition-transform hover:scale-[1.03]"
+              style={{ borderColor: `${hub}44`, background: `${hub}14`, color: hub }}
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> {l.label}
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-[13px] text-muted-foreground">This entry has no provider links attached yet.</p>
+      )}
+      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+        No stream or pages are hosted by Yozora for this title — use the provider links above, or browse its
+        source catalog from the{" "}
+        <a href="#/extensions" className="font-semibold underline-offset-2 hover:underline" style={{ color: hub }}>
+          Extensions page
+        </a>{" "}
+        to import playable content.
+      </p>
+    </div>
+  );
+}
+
 function EpisodeList({ data, hub }: { data: DetailData; hub: string }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -364,7 +439,7 @@ function EpisodeList({ data, hub }: { data: DetailData; hub: string }) {
             {ep.streamUrl ? (
               <span className="mt-1.5 inline-block rounded-full bg-[#3BD47A]/15 px-2 py-0.5 text-[10px] font-bold text-[#3BD47A]">Stream available</span>
             ) : (
-              <span className="mt-1.5 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">No authorized stream in demo</span>
+              <span className="mt-1.5 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">No authorized stream — external links only</span>
             )}
           </div>
         </button>
@@ -435,7 +510,7 @@ function FilesPanel({ data, hub }: { data: DetailData; hub: string }) {
             <p className="text-[15px] font-bold">{isGame ? "Game installation" : "Script installation"}</p>
             <p className="mt-0.5 text-[13px] text-muted-foreground">
               {isGame
-                ? "Downloads in this demo are simulated transfers of permitted content. Official releases come from the developer's page."
+                ? "Yozora hosts no game files — use the official store page or magnet links from your providers. Downloads in Yozora stream real files only."
                 : "Scripts are sandboxed: Yozora records the install and permissions but never executes third-party code. Manage in Scripts."}
             </p>
           </div>
@@ -454,7 +529,6 @@ function FilesPanel({ data, hub }: { data: DetailData; hub: string }) {
               mediaId={data.media.id}
               label={`${data.media.title}${extra.version ? ` v${extra.version}` : ""}`}
               kind={isGame ? "GAME" : "SCRIPT"}
-              sizeBytes={extra.sizeGb ? extra.sizeGb * 1024 * 1024 * 1024 : 2 * 1024 * 1024}
               hub={hub}
             />
           </div>

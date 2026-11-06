@@ -1,63 +1,75 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { handle } from "@/lib/api-utils";
+import { serializeCatalogItem } from "@/lib/serialize";
+import { discoverCategory } from "@/lib/providers/engine";
 
-// Unified metadata database browser: characters | people | tags | stats.
+// Metadata database browser — backed by REAL data:
+//  - type=databases: the live Wotaku database directory (real entries, URLs)
+//  - type=tags: real tags aggregated from imported provider content
+//  - type=stats: real platform statistics (provider health included)
+// The old fake characters/people tables (seeded fiction) were removed.
+
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    const type = req.nextUrl.searchParams.get("type") ?? "characters";
-    const q = (req.nextUrl.searchParams.get("q") ?? "").trim();
+    const type = req.nextUrl.searchParams.get("type") ?? "databases";
+    const q = (req.nextUrl.searchParams.get("q") ?? "").trim().toLowerCase();
 
-    if (type === "characters") {
-      const rows = await db.character.findMany({
-        where: q ? { name: { contains: q } } : {},
-        include: { media: { include: { media: { select: { id: true, slug: true, title: true, coverUrl: true, category: true, accent: true } } } } },
-        orderBy: { name: "asc" },
-        take: 60,
-      });
-      return NextResponse.json({
-        characters: rows.map((c) => ({
-          id: c.id, name: c.name, description: c.description, imageUrl: c.imageUrl,
-          media: c.media.map((mc) => ({ ...mc.media, role: mc.role })),
-        })),
-      });
-    }
-
-    if (type === "people") {
-      const rows = await db.person.findMany({
-        where: q ? { name: { contains: q } } : {},
-        include: { media: { include: { media: { select: { id: true, slug: true, title: true, coverUrl: true, category: true, accent: true } } } } },
-        orderBy: [{ kind: "asc" }, { name: "asc" }],
+    if (type === "databases") {
+      let count = await db.catalogItem.count({ where: { category: "DATABASE" } });
+      if (count === 0) {
+        await discoverCategory("DATABASE").catch(() => null);
+        count = await db.catalogItem.count({ where: { category: "DATABASE" } });
+      }
+      const rows = await db.catalogItem.findMany({
+        where: { category: "DATABASE" },
+        include: { provider: { select: { id: true, name: true, status: true, homepage: true } } },
+        orderBy: { title: "asc" },
         take: 80,
       });
       return NextResponse.json({
-        people: rows.map((p) => ({
-          id: p.id, name: p.name, kind: p.kind, bio: p.bio,
-          media: p.media.map((mp) => ({ ...mp.media, role: mp.role })),
-        })),
+        databases: rows
+          .filter((r) => !q || r.title.toLowerCase().includes(q) || (r.description ?? "").toLowerCase().includes(q))
+          .map((r) => ({
+            ...serializeCatalogItem(r),
+            provider: { id: r.provider.id, name: r.provider.name, status: r.provider.status },
+          })),
       });
     }
 
     if (type === "tags") {
-      const rows = await db.tagDef.findMany({
-        where: q ? { name: { contains: q } } : {},
-        orderBy: { count: "desc" },
-        take: 120,
-      });
-      return NextResponse.json({ tags: rows });
+      // aggregate real tags from imported catalog + unified media
+      const media = await db.media.findMany({ select: { tags: true }, take: 2000 });
+      const counts = new Map<string, number>();
+      for (const m of media) {
+        for (const t of JSON.parse(m.tags || "[]") as string[]) {
+          counts.set(t, (counts.get(t) ?? 0) + 1);
+        }
+      }
+      const tags = [...counts.entries()]
+        .filter(([name]) => !q || name.includes(q))
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 120)
+        .map(([name, count]) => ({ name, count }));
+      return NextResponse.json({ tags });
     }
 
     if (type === "stats") {
       const byCategory = await db.media.groupBy({ by: ["category"], _count: { _all: true } });
-      const [chars, people, tags, providers, chapters, pages, episodes, gallery] = await Promise.all([
-        db.character.count(), db.person.count(), db.tagDef.count(),
+      const [providers, chapters, pages, episodes, gallery] = await Promise.all([
         db.provider.count({ where: { installed: true } }),
         db.chapter.count(), db.chapterPage.count(), db.episode.count(), db.galleryImage.count(),
       ]);
+      const providersHealth = await db.provider.findMany({
+        select: { id: true, name: true, category: true, status: true, lastCheckedAt: true, lastError: true },
+        where: { installed: true },
+        orderBy: { name: "asc" },
+      });
       const topStudios = await db.media.groupBy({ by: ["studio"], _count: { _all: true }, where: { studio: { not: null } }, orderBy: { _count: { studio: "desc" } }, take: 8 });
       return NextResponse.json({
         byCategory: byCategory.map((c) => ({ category: c.category, count: c._count._all })),
-        totals: { characters: chars, people, tags, providers, chapters, pages, episodes, galleryImages: gallery },
+        totals: { providers, chapters, pages, episodes, galleryImages: gallery },
+        providersHealth,
         topStudios: topStudios.filter((s) => s.studio).map((s) => ({ name: s.studio as string, count: s._count._all })),
       });
     }
