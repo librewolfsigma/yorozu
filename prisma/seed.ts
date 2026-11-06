@@ -73,6 +73,14 @@ async function main() {
     where: { links: { none: {} } }, // unified media with no real provider link
   });
   if (removed.count) console.log(`  ✓ purged ${removed.count} legacy unlinked media rows`);
+  const removedChars = await db.mediaCharacter.deleteMany({});
+  const removedPeople = await db.mediaPerson.deleteMany({});
+  const removedCharRows = await db.character.deleteMany({});
+  const removedPersonRows = await db.person.deleteMany({});
+  const removedTagDefs = await db.tagDef.deleteMany({});
+  if (removedCharRows.count || removedPersonRows.count || removedTagDefs.count) {
+    console.log(`  ✓ purged fictional metadata (${removedCharRows.count} characters, ${removedPersonRows.count} people, ${removedTagDefs.count} tagdefs)`);
+  }
   const removedCatalog = await db.catalogItem.deleteMany({
     where: { provider: { id: { in: ["aoistream", "kurostream", "inkscans", "sakurascan", "seoulink", "webtoonvault", "inkvault", "arthaven", "nightflix", "rubytube", "playvault", "velvetstore", "scriptforge", "resourcebase"] } } },
   });

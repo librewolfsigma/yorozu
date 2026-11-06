@@ -78,7 +78,8 @@ export function AgeGate({ open, onAccept }: { open: boolean; onAccept: () => voi
             </div>
 
             <p className="mt-5 text-[11px] leading-relaxed text-muted-foreground/80">
-              Yozora only hosts fictional demo content depicting adults. Underage, exploitative or
+              Yozora aggregates metadata and publicly served content from third-party providers,
+              intended for fictional adults. Underage, exploitative or
               non-consensual material is prohibited.{" "}
               <a href="#/policy" className="underline hover:text-foreground">Content policy</a>
             </p>

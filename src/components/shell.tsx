@@ -230,7 +230,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </div>
               <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
                 Universal 18+ media platform. Mihon-inspired extensions, AniList-style tracking,
-                Hikari-inspired design. Original code & original fictional demo content.
+                Hikari-inspired design. Catalog data is fetched live from integrated third-party providers.
               </p>
               <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#EF5B6B]/15 px-2.5 py-1 text-[11px] font-bold text-[#FF8B96]">
                 <ShieldCheck className="h-3.5 w-3.5" /> 18+ ONLY · AGE VERIFIED
@@ -267,7 +267,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="mt-8 flex flex-col items-start justify-between gap-2 border-t border-border pt-5 text-[12px] text-muted-foreground md:flex-row md:items-center">
-            <p>© {new Date().getFullYear()} Yozora (demo). All catalog data is fictional; covers are generated placeholders.</p>
+            <p>© {new Date().getFullYear()} Yozora. All catalog content comes from integrated external providers (see Extensions); Yozora hosts no media files.</p>
             <p>Design inspired by myhikari.in · Architecture inspired by Mihon & AniList</p>
           </div>
         </div>

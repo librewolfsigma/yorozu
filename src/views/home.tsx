@@ -70,7 +70,7 @@ export default function HomeView() {
                 {hero.year && <span>{hero.year}</span>}
                 {hero.format && <span>· {hero.format}</span>}
                 {hero.status && <span>· {hero.status === "ONGOING" ? "Ongoing" : "Completed"}</span>}
-                <span className="font-semibold" style={{ color: heroMeta!.hub }}>★ {hero.rating.toFixed(1)}</span>
+                {hero.rating > 0 && <span className="font-semibold" style={{ color: heroMeta!.hub }}>★ {hero.rating.toFixed(1)}</span>}
               </div>
               <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-foreground/80 line-clamp-3">
                 {hero.description}
