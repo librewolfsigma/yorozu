@@ -11,7 +11,7 @@
 //  - E-Hentai image resolution fetches one public page per image at import
 //    time (the site's standard viewer URLs); no auth/DRM is bypassed.
 
-import { match1, matchAll, liveJson, liveText, stripTags, htmlDecode, PLATFORM_UA } from "./http";
+import { match1, matchAll, liveJson, liveText, stripTags, htmlDecode, PLATFORM_UA, LiveFetchError } from "./http";
 import type { LiveAdapter, LiveSearchItem, LiveUnits } from "./types";
 
 // ─── E-Hentai ───
@@ -141,7 +141,12 @@ export const ehentaiAdapter: LiveAdapter = {
     "Public site integration (documented in e-hentai docs): HTML search → official api.php gdata metadata API → gallery page → per-image viewer pages resolved at import. No auth, DRM or paywall bypassed; only publicly served pages are read.",
 
   async ping() {
-    await liveText("https://e-hentai.org/home/", { timeoutMs: 12_000 });
+    // NOTE(verified 2025): EH removed the old /home/ page (now 404).
+    // Probe the front page instead and assert it is actually EH HTML.
+    const html = await liveText("https://e-hentai.org/", { timeoutMs: 12_000 });
+    if (!/e-hentai|ehgt\.org|E-Hentai/i.test(html.slice(0, 4000))) {
+      throw new LiveFetchError(502, "e-hentai.org reachable but response is not EH content");
+    }
   },
 
   async search(q, opts) {

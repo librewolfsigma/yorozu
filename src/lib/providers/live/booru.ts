@@ -11,7 +11,7 @@
 // via tag blocklist (see BLOCKED_TAGS) as an additional safety layer on top
 // of each site's own moderation. loli/shota/child tags are hard-blocked.
 
-import { LiveFetchError, liveJson, curlJson, PLATFORM_UA } from "./http";
+import { LiveFetchError, liveJson, liveText, curlJson, PLATFORM_UA } from "./http";
 import type { LiveAdapter, LiveSearchItem, LiveUnits, SearchOpts } from "./types";
 
 // Hard safety filter — these tags NEVER surface in Yozora, regardless of source.
@@ -181,9 +181,18 @@ export const yandereAdapter: LiveAdapter = {
 
   async search(q, opts) {
     const page = Math.max(1, opts?.page ?? 1);
-    const tags = q.trim() ? `${q.trim()} rating:explicit` : "rating:explicit order:score";
-    const url = `https://yande.re/post.json?limit=40&page=${page}&tags=${encodeURIComponent(tags)}`;
-    const data = await liveJson<MoebooruPost[]>(url);
+    // VERIFIED(2025): Moebooru matches tags exactly, so `q rating:explicit`
+    // returns empty whenever the queried tag has no explicit posts (e.g.
+    // "fate" on yande.re). Search explicit first, fall back to unfiltered;
+    // hasBlockedTag() still filters disallowed content either way.
+    const base = q.trim();
+    const explicit = base ? `${base} rating:explicit` : "rating:explicit order:score";
+    const url = `https://yande.re/post.json?limit=40&page=${page}&tags=${encodeURIComponent(explicit)}`;
+    let data = await liveJson<MoebooruPost[]>(url);
+    if (!data.length && base) {
+      const fallbackUrl = `https://yande.re/post.json?limit=40&page=${page}&tags=${encodeURIComponent(base)}`;
+      data = await liveJson<MoebooruPost[]>(fallbackUrl);
+    }
     return data.map((p) => moeNormalize(p, "yande.re", "https://yande.re")).filter(
       (x): x is LiveSearchItem => x !== null,
     );
@@ -245,24 +254,48 @@ function dapiNormalize(p: DapiPost, host: string, base: string): LiveSearchItem 
   };
 }
 
+/**
+ * VERIFIED(2025): hypnohub dapi returns HTTP 200 with a ZERO-BYTE body
+ * (not `[]`) whenever a tag combination matches zero posts. JSON.parse on
+ * that body throws "Unexpected end of JSON input". Treat empty text as an
+ * empty result set.
+ */
+async function dapiJson(url: string): Promise<DapiPost[]> {
+  const text = await liveText(url, { headers: { Accept: "application/json" } });
+  if (!text.trim()) return [];
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return Array.isArray(parsed) ? (parsed as DapiPost[]) : [];
+  } catch {
+    throw new LiveFetchError(502, "Hypnohub returned non-JSON payload");
+  }
+}
+
 export const hypnohubAdapter: LiveAdapter = {
   id: "hypnohub",
   integration:
     "Gelbooru-0.2 public dapi JSON endpoint (index.php?page=dapi&s=post&q=index&json=1), anonymous read access. Metadata + publicly served image URLs; safety tag filter applied client-side.",
 
   async ping() {
-    const r = await liveJson<DapiPost[]>(
+    const r = await dapiJson(
       "https://hypnohub.net/index.php?page=dapi&s=post&q=index&json=1&limit=1",
     );
-    if (!Array.isArray(r)) throw new LiveFetchError(502, "Hypnohub returned unexpected payload");
+    if (!r.length) throw new LiveFetchError(502, "Hypnohub returned unexpected payload");
   },
 
   async search(q, opts) {
     const page = Math.max(0, (opts?.page ?? 1) - 1); // dapi pages are 0-based
-    const tags = q.trim() ? `${q.trim()} rating:explicit` : "rating:explicit";
+    const base = q.trim();
+    // VERIFIED(2025): like Moebooru, `q rating:explicit` empties results when
+    // the tag has no explicit posts — try explicit first, fall back unfiltered.
+    const tags = base ? `${base} rating:explicit` : "rating:explicit order:score";
     const url = `https://hypnohub.net/index.php?page=dapi&s=post&q=index&json=1&limit=40&pid=${page}&tags=${encodeURIComponent(tags)}`;
-    const data = await liveJson<DapiPost[]>(url);
-    return (Array.isArray(data) ? data : []).map((p) => dapiNormalize(p, "hypnohub.net", "https://hypnohub.net")).filter(
+    let data = await dapiJson(url);
+    if (!data.length && base) {
+      const fallbackUrl = `https://hypnohub.net/index.php?page=dapi&s=post&q=index&json=1&limit=40&pid=${page}&tags=${encodeURIComponent(base)}`;
+      data = await dapiJson(fallbackUrl);
+    }
+    return data.map((p) => dapiNormalize(p, "hypnohub.net", "https://hypnohub.net")).filter(
       (x): x is LiveSearchItem => x !== null,
     );
   },
