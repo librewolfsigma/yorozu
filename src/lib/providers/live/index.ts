@@ -9,20 +9,31 @@ import { ehentaiAdapter, manga18fxAdapter, wholesomelistAdapter } from "./manga"
 import { rule34videoAdapter } from "./av";
 import { sukebeiAnimeAdapter, sukebeiMangaAdapter } from "./sukebei";
 import { wotakuDatabasesAdapter, wotakuMiscAdapter, wotakuScriptsAdapter } from "./wotaku";
+import { mangadexAdapter } from "./mangadex";
+import { mangaupdatesAdapter } from "./mangaupdates";
+import { anidbAdapter } from "./anidb";
+import { fansDbAdapter, javStashAdapter, pmvStashAdapter, stashDbAdapter } from "./stashbox";
 import type { LiveAdapter } from "./types";
 
 export const LIVE_ADAPTERS: Record<string, LiveAdapter> = {
   anilist: anilistAdapter,
+  anidb: anidbAdapter,
   e621: e621Adapter,
   yandere: yandereAdapter,
   hypnohub: hypnohubAdapter,
   gelbooru: gelbooruAdapter,
   ehentai: ehentaiAdapter,
+  mangadex: mangadexAdapter,
+  mangaupdates: mangaupdatesAdapter,
   wholesomelist: wholesomelistAdapter,
   manga18fx: manga18fxAdapter,
   vndb: vndbAdapter,
   dlsite: dlsiteAdapter,
   rule34video: rule34videoAdapter,
+  stashdb: stashDbAdapter,
+  javstash: javStashAdapter,
+  fansdb: fansDbAdapter,
+  pmvstash: pmvStashAdapter,
   "sukebei-anime": sukebeiAnimeAdapter,
   "sukebei-manga": sukebeiMangaAdapter,
   "wotaku-scripts": wotakuScriptsAdapter,

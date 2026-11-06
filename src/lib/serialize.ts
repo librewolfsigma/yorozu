@@ -11,6 +11,7 @@ export interface MediaDTO {
   accent: string | null;
   accent2: string | null;
   category: string;
+  videoKind: string | null;
   format: string | null;
   status: string | null;
   year: number | null;
@@ -35,7 +36,7 @@ export function serializeMedia(m: Media): MediaDTO {
     description: m.description,
     coverUrl: m.coverUrl, bannerUrl: m.bannerUrl,
     accent: m.accent, accent2: m.accent2,
-    category: m.category, format: m.format, status: m.status, year: m.year,
+    category: m.category, videoKind: m.videoKind, format: m.format, status: m.status, year: m.year,
     rating: m.rating, ratingCount: m.ratingCount, popularity: m.popularity,
     genres: JSON.parse(m.genres || "[]"),
     tags: JSON.parse(m.tags || "[]"),
@@ -66,6 +67,7 @@ export function serializeCatalogItem(item: {
   id: string; providerId: string; externalId: string; title: string;
   altTitles: string; description: string | null; coverUrl: string | null;
   bannerUrl: string | null; accent: string | null; category: string;
+  videoKind: string | null;
   format: string | null; status: string | null; year: number | null;
   score: number | null; popularity: number; genres: string; tags: string;
   studio: string | null; creator: string | null; ageRating: string;
@@ -77,7 +79,7 @@ export function serializeCatalogItem(item: {
     id: item.id, providerId: item.providerId, externalId: item.externalId,
     title: item.title, altTitles: JSON.parse(item.altTitles) as string[],
     description: item.description, coverUrl: item.coverUrl, bannerUrl: item.bannerUrl,
-    accent: item.accent, category: item.category, format: item.format,
+    accent: item.accent, category: item.category, videoKind: item.videoKind, format: item.format,
     status: item.status, year: item.year, score: item.score,
     popularity: item.popularity, genres: JSON.parse(item.genres) as string[],
     tags: JSON.parse(item.tags) as string[], studio: item.studio,

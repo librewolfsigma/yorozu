@@ -8,6 +8,31 @@ import { proxyUrl } from "@/lib/imgproxy";
 // Chapters imported from live providers may store a sourceUrl (upstream page)
 // and resolve their real image URLs lazily on first open. Resolution results
 // are cached into ChapterPage rows so subsequent opens are instant.
+//
+// EXPIRING IMAGE HOSTS: MangaDex at-home base URLs rotate/expiry (~15 min).
+// For providers listed in EXPIRING_PAGE_PROVIDERS, cached pages older than
+// PAGE_TTL_MS are transparently re-resolved on open (images never 404 mid-read).
+const EXPIRING_PAGE_PROVIDERS = new Set(["mangadex"]);
+const PAGE_TTL_MS = 10 * 60 * 1000;
+
+async function resolveIntoRows(chapterId: string, sourceProvider: string, sourceUrl: string, pagesResolvedAt: Date | null) {
+  const adapter = getLiveAdapter(sourceProvider);
+  if (!adapter?.resolveChapter) return null;
+  const images = await adapter.resolveChapter(sourceUrl).catch(() => [] as string[]);
+  if (!images.length) return null;
+  await db.chapterPage.deleteMany({ where: { chapterId } });
+  for (let i = 0; i < images.length; i++) {
+    await db.chapterPage.create({
+      data: { chapterId, idx: i, imageUrl: proxyUrl(images[i]) ?? images[i] },
+    });
+  }
+  return db.chapter.update({
+    where: { id: chapterId },
+    data: { pageCount: images.length, pagesResolvedAt: new Date() },
+    include: { pages: { orderBy: { idx: "asc" } }, media: { select: { id: true, title: true } } },
+  });
+}
+
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return handle(async () => {
     const { id } = await ctx.params;
@@ -17,28 +42,22 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     });
     if (!chapter) throw new ApiError(404, "Chapter not found");
 
-    // Lazy resolution path
+    // First open: no pages yet.
     if (chapter.pages.length === 0 && chapter.sourceProvider && chapter.sourceUrl) {
-      const adapter = getLiveAdapter(chapter.sourceProvider);
-      if (adapter?.resolveChapter) {
-        const images = await adapter.resolveChapter(chapter.sourceUrl).catch(() => [] as string[]);
-        if (images.length) {
-          await db.chapterPage.deleteMany({ where: { chapterId: chapter.id } });
-          for (let i = 0; i < images.length; i++) {
-            await db.chapterPage.create({
-              data: {
-                chapterId: chapter.id, idx: i,
-                imageUrl: proxyUrl(images[i]) ?? images[i],
-              },
-            });
-          }
-          chapter = await db.chapter.update({
-            where: { id: chapter.id },
-            data: { pageCount: images.length },
-            include: { pages: { orderBy: { idx: "asc" } }, media: { select: { id: true, title: true } } },
-          });
-        }
-      }
+      const updated = await resolveIntoRows(chapter.id, chapter.sourceProvider, chapter.sourceUrl, null);
+      if (updated) chapter = updated;
+    } else if (
+      chapter.pages.length > 0 &&
+      chapter.sourceProvider &&
+      chapter.sourceUrl &&
+      EXPIRING_PAGE_PROVIDERS.has(chapter.sourceProvider) &&
+      chapter.pagesResolvedAt &&
+      Date.now() - chapter.pagesResolvedAt.getTime() > PAGE_TTL_MS
+    ) {
+      // Cached pages are past the expiry window — re-resolve transparently.
+      const updated = await resolveIntoRows(chapter.id, chapter.sourceProvider, chapter.sourceUrl, chapter.pagesResolvedAt).catch(() => null);
+      // If re-resolution fails (upstream hiccup) keep serving cached rows.
+      if (updated) chapter = updated;
     }
 
     return NextResponse.json({

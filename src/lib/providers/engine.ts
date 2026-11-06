@@ -134,7 +134,7 @@ export async function healthCheck(id: string) {
       lastError = "No live adapter implementation is registered for this provider.";
     } else {
       try {
-        await adapter.ping();
+        await adapter.ping(config);
       } catch (e) {
         status = "ERROR";
         lastError = e instanceof Error ? e.message : String(e);
@@ -181,6 +181,7 @@ export async function upsertLiveItems(providerId: string, items: LiveSearchItem[
       coverUrl: item.coverUrl ?? null,
       bannerUrl: item.bannerUrl ?? null,
       category: item.category,
+      videoKind: item.videoKind ?? null,
       format: item.format ?? null,
       status: item.status ?? null,
       year: item.year ?? null,
@@ -206,6 +207,7 @@ export async function upsertLiveItems(providerId: string, items: LiveSearchItem[
         description: data.description, coverUrl: data.coverUrl, bannerUrl: data.bannerUrl,
         score: data.score, popularity: data.popularity, genres: data.genres,
         tags: data.tags, externalUrl: data.externalUrl, extra: data.extra,
+        videoKind: data.videoKind,
       },
     });
     rows.push(row);
@@ -313,6 +315,7 @@ export async function importLightweight(catalogItemId: string) {
       accent: accent[0], accent2: accent[1],
       category: item.category, format: item.format, status: item.status,
       year: item.year,
+      videoKind: item.videoKind ?? null,
       rating: item.score ?? 0,
       ratingCount: item.popularity ?? 0,
       popularity: item.popularity,
@@ -348,7 +351,7 @@ export async function importCatalogItem(catalogItemId: string) {
     // enrich from the live provider when possible (fresh description etc.)
     let details: LiveSearchItem | null = null;
     if (adapter?.details) {
-      details = await adapter.details(item.externalId).catch(() => null);
+      details = await adapter.details(item.externalId, providerOpts(provider)).catch(() => null);
     }
 
     const externalLinks: { label: string; url: string }[] = [];
@@ -367,7 +370,7 @@ export async function importCatalogItem(catalogItemId: string) {
         coverUrl: proxyUrl(details?.coverUrl ?? item.coverUrl),
         bannerUrl: proxyUrl(details?.bannerUrl ?? item.bannerUrl),
         accent: accent[0], accent2: accent[1],
-        category: item.category, format: item.format, status: item.status,
+        category: item.category, videoKind: item.videoKind ?? null, format: item.format, status: item.status,
         year: item.year,
         rating: details?.score ?? item.score ?? 0,
         ratingCount: item.popularity ?? 0,

@@ -5,6 +5,8 @@ import { serializeMedia } from "@/lib/serialize";
 import { getCurrentUser } from "@/lib/auth";
 
 const CATEGORIES = ["ANIME", "MANGA", "MANHWA", "ILLUSTRATION", "AV", "GAME", "SCRIPT", "MISC"];
+// AV video subcategories — kept DISTINCT by design, never merged into ANIME.
+const VIDEO_KINDS = ["AV", "JAV", "PMV", "HMV", "CREATOR"];
 
 // Unified catalog browse: filters + search + sort + pagination.
 export async function GET(req: NextRequest) {
@@ -21,9 +23,12 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(60, Math.max(6, parseInt(sp.get("pageSize") ?? "24", 10)));
 
     if (category && !CATEGORIES.includes(category)) throw new ApiError(400, `Unknown category ${category}`);
+    const videoKind = sp.get("videoKind");
+    if (videoKind && !VIDEO_KINDS.includes(videoKind)) throw new ApiError(400, `Unknown videoKind ${videoKind}`);
 
     const where: Record<string, unknown> = {};
     if (category) where.category = category;
+    if (videoKind) where.videoKind = videoKind;
     if (q) {
       where.OR = [
         { title: { contains: q } },

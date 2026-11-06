@@ -23,6 +23,7 @@ interface DetailData {
     id: string; slug: string; title: string; altTitles: string[];
     description: string | null; coverUrl: string | null; bannerUrl: string | null;
     accent: string | null; accent2: string | null; category: string;
+    videoKind: string | null;
     format: string | null; status: string | null; year: number | null;
     rating: number; ratingCount: number; popularity: number;
     genres: string[]; tags: string[]; studio: string | null; creator: string | null;
@@ -129,6 +130,11 @@ export default function DetailView({ slug }: { slug?: string }) {
               </span>
               <Badge variant="secondary" className="rounded-full bg-[#EF5B6B]/15 text-[10px] font-bold text-[#FF8B96]">{media.ageRating}</Badge>
               {media.format && <span className="text-xs text-muted-foreground">{media.format}</span>}
+              {media.videoKind && (
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${hub}1a`, color: hub }} title="Video subcategory — kept distinct by design (never merged into Anime)">
+                  {media.videoKind === "CREATOR" ? "INDIE CREATOR" : media.videoKind}
+                </span>
+              )}
               {media.status && <span className="text-xs font-semibold" style={{ color: hub }}>{STATUS_LABELS[media.status] ?? media.status}</span>}
               {media.year && <span className="text-xs text-muted-foreground">· {media.year}</span>}
               {viaProvider && (
@@ -408,6 +414,13 @@ function HowToWatch({ data, hub }: { data: DetailData; hub: string }) {
         </a>{" "}
         to import playable content.
       </p>
+      {Boolean((media.extra as { metadataOnly?: boolean })?.metadataOnly) && (
+        <p className="mt-2 rounded-lg bg-background px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          <strong className="text-foreground">Metadata-only record.</strong> This entry came from a metadata
+          database (StashDB / JAVStash / FansDB / PMV Stash / MangaUpdates / AniDB). It catalogs the title,
+          performers/studio and tags — playback availability is a separate thing and happens on the external site.
+        </p>
+      )}
     </div>
   );
 }

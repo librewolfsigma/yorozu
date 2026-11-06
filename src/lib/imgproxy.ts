@@ -9,10 +9,13 @@ const ALLOWED_HOSTS = new Set([
   "gelbooru.com", "simg4.gelbooru.com",
   // manga
   "e-hentai.org", "ehgt.org", "ei.e-hentai.org", "ul.ehgt.org",
+  "mangadex.org", "uploads.mangadex.org",
   "manga18fx.com", "img01.manga18fx.com", "img02.manga18fx.com", "img03.manga18fx.com",
   "wholesomelist.com", "imgchest.com", "cdni.imgchest.com", "s.imgchest.com",
   // av
   "rule34video.com", "javdb.com", "c0.jdbstatic.com", "c1.jdbstatic.com",
+  // stash-box family (scene covers/CDN assets; scenes themselves never proxied)
+  "stashdb.org", "javstash.org", "fansdb.cc", "pmvstash.org",
   // anime
   "s4.anilist.co", "anilistcdn.net",
   // games
@@ -25,6 +28,12 @@ const ALLOWED_HOSTS = new Set([
 // suffix because client hostnames vary (xxx.dhportvgmptc.hath.network etc.).
 export function isHathHost(hostname: string): boolean {
   return hostname.endsWith(".hath.network");
+}
+
+// MangaDex at-home image servers — random hostnames *.mangadex.network that
+// rotate frequently (official API contract); matched by suffix.
+export function isMangaDexNetworkHost(hostname: string): boolean {
+  return hostname.endsWith(".mangadex.network");
 }
 
 // Referer some hosts require (or expect) — public pages only.
@@ -52,7 +61,7 @@ export function isAllowedMediaUrl(raw: string): boolean {
   try {
     const u = new URL(raw);
     if (u.protocol !== "https:") return false;
-    return ALLOWED_HOSTS.has(u.hostname) || isHathHost(u.hostname);
+    return ALLOWED_HOSTS.has(u.hostname) || isHathHost(u.hostname) || isMangaDexNetworkHost(u.hostname);
   } catch {
     return false;
   }

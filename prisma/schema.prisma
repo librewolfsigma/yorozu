@@ -88,6 +88,7 @@ model CatalogItem {
   bannerUrl     String?
   accent        String? // per-item accent for themed UI
   category      String
+  videoKind     String? // AV subcategory: AV | JAV | PMV | HMV | CREATOR (never merged into ANIME)
   format        String?
   status        String?
   year          Int?
@@ -124,6 +125,7 @@ model Media {
   accent        String?
   accent2       String?
   category      String // ANIME | MANGA | MANHWA | ILLUSTRATION | AV | GAME | SCRIPT | MISC
+  videoKind     String? // AV subcategory: AV | JAV | PMV | HMV | CREATOR
   format        String? // TV / Movie / OVA / Webtoon / Doujin / Gallery / VN / Userscript …
   status        String? // ONGOING | COMPLETED | HIATUS
   year          Int?
@@ -199,6 +201,7 @@ model Chapter {
   releasedAt     DateTime?
   sourceProvider String? // live provider id when pages resolve lazily (e.g. ehentai)
   sourceUrl      String? // upstream chapter/gallery URL for lazy resolution
+  pagesResolvedAt DateTime? // when lazy pages were last resolved — providers with expiring image hosts (MangaDex at-home) re-resolve past a TTL
   pages          ChapterPage[]
 
   @@index([mediaId])
@@ -450,4 +453,15 @@ model GalleryFavorite {
   createdAt DateTime @default(now())
 
   @@unique([userId, imageId])
+}
+
+// Scheduled metadata-sync audit trail (see src/lib/sync.ts).
+model SyncLog {
+  id     String   @id @default(cuid())
+  job    String // "anidb-crosswalk" | "provider-health" | …
+  status String // OK | ERROR
+  detail String? // JSON report / error message
+  ranAt  DateTime @default(now())
+
+  @@index([job, ranAt])
 }

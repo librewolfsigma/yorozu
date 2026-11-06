@@ -66,6 +66,7 @@ export default function BrowseView({ category, query }: { category?: string; que
   const [genres, setGenres] = useState<string[]>([]);
   const [year, setYear] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
+  const [videoKind, setVideoKind] = useState<string>("all");
   const [sort, setSort] = useState("POPULAR");
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
@@ -95,11 +96,12 @@ export default function BrowseView({ category, query }: { category?: string; que
     if (genres.length) p.set("genres", genres.join(","));
     if (year !== "all") p.set("year", year);
     if (status !== "all") p.set("status", status);
+    if (category === "AV" && videoKind !== "all") p.set("videoKind", videoKind);
     p.set("sort", sort);
     p.set("page", String(page));
     p.set("pageSize", "24");
     return p.toString();
-  }, [category, debouncedQ, genres, year, status, sort, page]);
+  }, [category, debouncedQ, genres, year, status, videoKind, sort, page]);
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["browse", params],
@@ -165,10 +167,29 @@ export default function BrowseView({ category, query }: { category?: string; que
         <div className="mb-5 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-bold">Filters</p>
-            <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground" onClick={() => { setGenres([]); setYear("all"); setStatus("all"); resetPage(); }}>
+            <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground" onClick={() => { setGenres([]); setYear("all"); setStatus("all"); setVideoKind("all"); resetPage(); }}>
               <X className="h-3 w-3" /> Clear all
             </Button>
           </div>
+          {category === "AV" && (
+            <div className="mt-3">
+              <Label className="text-xs text-muted-foreground">Video subcategory — kept distinct by design (never merged into Anime)</Label>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {["all", "AV", "JAV", "PMV", "HMV", "CREATOR"].map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => { setVideoKind(k); resetPage(); }}
+                    className={`h-8 rounded-lg px-3 text-xs font-semibold transition-colors ${videoKind === k ? "bg-[#3DB4F2] text-[#04121E]" : "border border-border bg-background text-muted-foreground hover:text-foreground"}`}
+                  >
+                    {k === "all" ? "All video" : k === "AV" ? "General AV" : k === "JAV" ? "JAV" : k === "PMV" ? "PMV" : k === "HMV" ? "HMV" : "Indie creators"}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                Subcategories come from each metadata source's specialization: StashDB → general AV · JAVStash → JAV · PMV Stash → PMV/HMV · FansDB → independent creators.
+              </p>
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap gap-4">
             <div className="min-w-44">
               <Label className="text-xs text-muted-foreground">Status</Label>

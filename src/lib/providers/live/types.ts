@@ -9,6 +9,11 @@ export interface LiveSearchItem {
   coverUrl?: string | null;
   bannerUrl?: string | null;
   category: string; // ANIME | MANGA | MANHWA | ILLUSTRATION | AV | GAME | SCRIPT | MISC
+  /**
+   * Video subcategory for AV-category items — kept DISTINCT by design:
+   * AV | JAV | PMV | HMV | CREATOR. Never merged into ANIME.
+   */
+  videoKind?: string;
   format?: string | null;
   status?: string | null;
   year?: number | null;
@@ -57,14 +62,15 @@ export interface SearchOpts {
 /** A provider adapter for a real external source. */
 export interface LiveAdapter {
   id: string;
-  /** Lightweight liveness probe — throws on failure. */
-  ping(): Promise<void>;
+  /** Lightweight liveness probe — throws on failure. Receives the user's
+   *  provider config (e.g. API keys) so gated providers can actually probe. */
+  ping(config?: Record<string, string>): Promise<void>;
   /** Catalog search. `q` may be empty for "browse". */
   search(q: string, opts?: SearchOpts): Promise<LiveSearchItem[]>;
   /** Popular/trending listing used for discover rails (no query). */
   popular?(opts?: { page?: number }): Promise<LiveSearchItem[]>;
   /** Full details for one external item. */
-  details?(externalId: string): Promise<LiveSearchItem | null>;
+  details?(externalId: string, opts?: SearchOpts): Promise<LiveSearchItem | null>;
   /** Materializable content units (chapters/pages/episodes/images). */
   units?(externalId: string): Promise<LiveUnits | null>;
   /**

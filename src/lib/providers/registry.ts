@@ -138,6 +138,63 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     capabilities: ["search", "discover", "health"],
     configSchema: [],
   },
+  {
+    id: "mangadex", name: "MangaDex", category: "MANGA",
+    description: "MangaDex official public API (api.mangadex.org) — anonymous reads, adult scope via contentRating=erotica,pornographic. REAL IN-SITE READING: chapters load through MangaDex's own at-home server, the API's sanctioned client flow. Manhwa/manhua auto-routed by original language.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://api.mangadex.org/docs/",
+    capabilities: ["search", "details", "discover", "chapters", "read", "health"],
+    configSchema: [],
+  },
+  {
+    id: "mangaupdates", name: "MangaUpdates", category: "MANGA",
+    description: "MangaUpdates official public API (api.mangaupdates.com/v1) — series metadata, associated titles, ratings, release status for manga/manhwa/manhua. Metadata only (no chapters hosted upstream); search requires a query.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://api.mangaupdates.com/info",
+    capabilities: ["search", "details", "health"],
+    configSchema: [],
+  },
+  {
+    id: "anidb", name: "AniDB (titles + crosswalk)", category: "ANIME",
+    description: "AniDB's public anime-titles export (anidb.net/api/anime-titles.xml.gz). Provides title search and powers the scheduled AniDB↔catalog ID crosswalk (ProviderLink rows for dedup and 'open on AniDB' links). Full AniDB metadata needs a registered API client and is NOT integrated.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://wiki.anidb.net/HTTP_API_Definition",
+    capabilities: ["search", "details", "health", "idmap"],
+    configSchema: [],
+  },
+  {
+    id: "stashdb", name: "StashDB", category: "AV",
+    description: "Community scene/performer/studio metadata for general adult video, via the official stash-box GraphQL API (docs.stashapp.cc). REQUIRES A FREE API KEY (stashdb.org → account settings). Metadata only — playback stays an explicit external action. Subcategory: AV.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://docs.stashapp.cc",
+    capabilities: ["search", "details", "discover", "health", "metadata"],
+    configSchema: [
+      { key: "apiKey", label: "StashDB API key", type: "string", required: true, help: "stashdb.org → user settings → API key. Free account required." },
+    ],
+  },
+  {
+    id: "javstash", name: "JAVStash", category: "AV",
+    description: "JAV-specialized stash-box instance (javstash.org) — scene metadata keyed to JAV releases. Same official GraphQL API and free-key gate as StashDB. Subcategory: JAV (kept distinct from AV/PMV/HMV by design).",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://javstash.org",
+    capabilities: ["search", "details", "discover", "health", "metadata"],
+    configSchema: [
+      { key: "apiKey", label: "JAVStash API key", type: "string", required: true, help: "javstash.org → account settings → API key." },
+    ],
+  },
+  {
+    id: "fansdb", name: "FansDB", category: "AV",
+    description: "Independent/indie-creator scene metadata (clip-store releases) via the official stash-box GraphQL API. Free API key required. Subcategory: CREATOR — independent creators stay a distinct slice of the video catalog.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://fansdb.cc",
+    capabilities: ["search", "details", "discover", "health", "metadata"],
+    configSchema: [
+      { key: "apiKey", label: "FansDB API key", type: "string", required: true, help: "fansdb.cc → account settings → API key." },
+    ],
+  },
+  {
+    id: "pmvstash", name: "PMV Stash", category: "AV",
+    description: "PMV/HMV (edited music-video compilation) scene metadata via the official stash-box GraphQL API. Free API key required. Subcategory: PMV — never merged into general AV or Anime.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://pmvstash.org",
+    capabilities: ["search", "details", "discover", "health", "metadata"],
+    configSchema: [
+      { key: "apiKey", label: "PMV Stash API key", type: "string", required: true, help: "pmvstash.org → account settings → API key." },
+    ],
+  },
 ];
 
 // Providers installed by default on a fresh database.
