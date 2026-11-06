@@ -1,0 +1,451 @@
+// Yozora — 18+ Universal Media Platform
+// Unified database merging information from multiple providers (Mihon-inspired
+// extension architecture + AniList-like tracking + Hikari-inspired UX).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── Users & sessions ───────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  displayName   String?
+  bio           String?
+  avatarUrl     String?
+  passwordHash  String
+  ageVerifiedAt DateTime?
+  isDemo        Boolean  @default(false)
+  settings      String   @default("{}") // JSON: reader prefs, hidden categories…
+  createdAt     DateTime @default(now())
+
+  sessions         Session[]
+  library          LibraryEntry[]
+  collections      Collection[]
+  reviews          Review[]
+  notifications    Notification[]
+  history          HistoryEntry[]
+  progress         Progress[]
+  galleryFavorites GalleryFavorite[]
+  downloads        Download[]
+  reports          Report[]
+  scriptInstalls   ScriptInstall[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─────────────────────────── Provider system ───────────────────────────
+// Mihon-inspired: independent adapters, install/remove/configure/health-check.
+// `Provider` = installed adapter instance. `CatalogItem` = raw provider-side
+// entry. `Media` (+ ProviderLink) = unified, deduplicated platform entity.
+
+model Provider {
+  id            String    @id // slug, e.g. "inkscans"
+  name          String
+  category      String // ANIME | MANGA | MANHWA | ILLUSTRATION | AV | GAME | SCRIPT | MISC
+  description   String
+  version       String
+  author        String?
+  homepage      String?
+  capabilities  String    @default("[]") // JSON: ["search","details","chapters","streams","gallery","download","health"]
+  configSchema  String    @default("[]") // JSON: [{key,label,type,required,options,help}]
+  config        String? // JSON: user config values
+  status        String    @default("ACTIVE") // ACTIVE | ERROR | DISABLED
+  lastError     String?
+  lastCheckedAt DateTime?
+  installed     Boolean   @default(true)
+  installedAt   DateTime  @default(now())
+  items         CatalogItem[]
+
+  @@index([category])
+}
+
+model CatalogItem {
+  id            String   @id @default(cuid())
+  providerId    String
+  provider      Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  externalId    String
+  title         String
+  titleKey      String // normalized title for duplicate detection
+  altTitles     String   @default("[]")
+  description   String?
+  coverUrl      String?
+  bannerUrl     String?
+  accent        String? // per-item accent for themed UI
+  category      String
+  format        String?
+  status        String?
+  year          Int?
+  score         Float?
+  popularity    Int      @default(0)
+  genres        String   @default("[]")
+  tags          String   @default("[]")
+  studio        String?
+  creator       String?
+  ageRating     String   @default("18+")
+  contentFlags  String   @default("[]")
+  externalUrl   String?
+  extra         String   @default("{}") // category-specific JSON (engine, permissions…)
+  episodesCount Int?
+  chaptersCount Int?
+  galleryCount  Int?
+  imported      Boolean  @default(false) // already merged into unified Media
+  createdAt     DateTime @default(now())
+
+  @@unique([providerId, externalId])
+  @@index([titleKey])
+  @@index([category])
+}
+
+model Media {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  title         String
+  titleKey      String
+  altTitles     String   @default("[]")
+  description   String?
+  coverUrl      String?
+  bannerUrl     String?
+  accent        String?
+  accent2       String?
+  category      String // ANIME | MANGA | MANHWA | ILLUSTRATION | AV | GAME | SCRIPT | MISC
+  format        String? // TV / Movie / OVA / Webtoon / Doujin / Gallery / VN / Userscript …
+  status        String? // ONGOING | COMPLETED | HIATUS
+  year          Int?
+  rating        Float    @default(0)
+  ratingCount   Int      @default(0)
+  popularity    Int      @default(0)
+  genres        String   @default("[]")
+  tags          String   @default("[]")
+  studio        String?
+  creator       String?
+  ageRating     String   @default("18+")
+  contentFlags  String   @default("[]")
+  externalLinks String   @default("[]")
+  extra         String   @default("{}")
+  links         ProviderLink[]
+  episodes      Episode[]
+  chapters      Chapter[]
+  gallery       GalleryImage[]
+  characters    MediaCharacter[]
+  people        MediaPerson[]
+  library       LibraryEntry[]
+  reviews       Review[]
+  progress      Progress[]
+  history       HistoryEntry[]
+  downloads     Download[]
+  collections   CollectionItem[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([category])
+  @@index([titleKey])
+}
+
+model ProviderLink {
+  id          String   @id @default(cuid())
+  mediaId     String
+  media       Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  providerId  String
+  externalId  String
+  externalUrl String?
+  addedAt     DateTime @default(now())
+
+  @@unique([providerId, externalId])
+  @@index([mediaId])
+}
+
+// ─────────────────────────── Content units ───────────────────────────
+
+model Episode {
+  id           String    @id @default(cuid())
+  mediaId      String
+  media        Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  number       Int
+  title        String?
+  thumbnailUrl String?
+  durationSec  Int?
+  streamUrl    String? // null = no authorized stream available from provider
+  streamType   String? // mp4 | hls | none
+  summary      String?
+  releasedAt   DateTime?
+
+  @@index([mediaId])
+}
+
+model Chapter {
+  id         String   @id @default(cuid())
+  mediaId    String
+  media      Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  number     Float
+  title      String?
+  volume     Float?
+  pageCount  Int
+  releasedAt DateTime?
+  pages      ChapterPage[]
+
+  @@index([mediaId])
+}
+
+model ChapterPage {
+  id        String  @id @default(cuid())
+  chapterId String
+  chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  idx       Int
+  imageUrl  String
+  width     Int     @default(800)
+  height    Int     @default(1200)
+
+  @@index([chapterId])
+}
+
+model GalleryImage {
+  id        String  @id @default(cuid())
+  mediaId   String
+  media     Media   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  idx       Int
+  imageUrl  String
+  thumbUrl  String?
+  width     Int     @default(1000)
+  height    Int     @default(1400)
+  tags      String  @default("[]")
+  favCount  Int     @default(0)
+
+  @@index([mediaId])
+}
+
+// ─────────────────────────── Tracking ───────────────────────────
+
+model LibraryEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId   String
+  media     Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  status    String   @default("PLANNING") // PLANNING | IN_PROGRESS | COMPLETED | PAUSED | DROPPED
+  progress  Float    @default(0) // latest chapter/episode number reached
+  score     Int? // 0–10 personal score
+  favorite  Boolean  @default(false)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, mediaId])
+  @@index([userId])
+}
+
+model Progress {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId     String
+  media       Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  itemId      String // episode / chapter id
+  kind        String // EPISODE | CHAPTER | GALLERY
+  positionSec Int? // video position
+  pageIndex   Int?
+  completed   Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, itemId])
+  @@index([userId])
+}
+
+model HistoryEntry {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId       String?
+  media         Media?   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  category      String
+  action        String // VIEW | READ | WATCH | BROWSE | SEARCH | IMPORT | INSTALL | DOWNLOAD | PLAY
+  detail        String?
+  titleSnapshot String?
+  coverSnapshot String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─────────────────────────── Collections & reviews ───────────────────────────
+
+model Collection {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  coverUrl    String?
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  items       CollectionItem[]
+
+  @@index([userId])
+}
+
+model CollectionItem {
+  id           String     @id @default(cuid())
+  collectionId String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  mediaId      String
+  media        Media      @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  addedAt      DateTime   @default(now())
+
+  @@unique([collectionId, mediaId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId   String
+  media     Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  score     Int // 1–10
+  title     String?
+  body      String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, mediaId])
+  @@index([mediaId])
+}
+
+// ─────────────────────────── Safety & moderation ───────────────────────────
+
+model Report {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  targetType String // MEDIA | REVIEW | GALLERY_IMAGE | COMMENT
+  targetId   String
+  reason     String
+  details    String?
+  status     String   @default("OPEN") // OPEN | REVIEWED | RESOLVED
+  createdAt  DateTime @default(now())
+
+  @@index([status])
+}
+
+// ─────────────────────────── Notifications ───────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   @default("INFO") // INFO | SUCCESS | WARNING | PROVIDER | LIBRARY
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─────────────────────────── Unified metadata DB ───────────────────────────
+
+model Character {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  imageUrl    String?
+  media       MediaCharacter[]
+}
+
+model MediaCharacter {
+  id          String    @id @default(cuid())
+  mediaId     String
+  media       Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  role        String? // MAIN | SUPPORTING
+
+  @@unique([mediaId, characterId])
+}
+
+model Person {
+  id   String @id @default(cuid())
+  name String @unique
+  kind String // STUDIO | AUTHOR | ARTIST | DIRECTOR | VA | DEVELOPER
+  bio  String?
+  media MediaPerson[]
+}
+
+model MediaPerson {
+  id       String @id @default(cuid())
+  mediaId  String
+  media    Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  role     String
+
+  @@unique([mediaId, personId, role])
+}
+
+model TagDef {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  kind        String  @default("GENRE") // GENRE | TAG
+  description String?
+  count       Int     @default(0)
+}
+
+// ─────────────────────────── Downloads & scripts ───────────────────────────
+
+model Download {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId     String
+  media       Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  itemId      String?
+  label       String
+  kind        String // CHAPTER | EPISODE | GALLERY | GAME | SCRIPT
+  sizeBytes   Int
+  status      String    @default("QUEUED") // QUEUED | RUNNING | PAUSED | DONE | ERROR | CANCELLED
+  progress    Float     @default(0) // 0–1
+  speedBps    Int       @default(0)
+  startedAt   DateTime?
+  completedAt DateTime?
+  path        String?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model ScriptInstall {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scriptId           String // CatalogItem id (SCRIPT category)
+  enabled            Boolean  @default(true)
+  grantedPermissions String   @default("[]")
+  installedAt        DateTime @default(now())
+
+  @@unique([userId, scriptId])
+}
+
+model GalleryFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imageId   String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, imageId])
+}

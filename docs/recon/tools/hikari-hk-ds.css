@@ -1,0 +1,57 @@
+/* 🎨 «زبان طراحی هیکاری» (ds، ۱۳ آبان ۱۴۰۵، خواست مالک: «کل هسته‌ی سایت منظم‌تر»)
+   یه جا برای همه‌ی اندازه‌ها، گوشه‌ها، فاصله‌ها و رنگ‌ها. هر صفحه‌ی جدید یا بازسازی‌شده فقط از همین‌ها استفاده می‌کنه:
+   - اندازه‌ی متن: فقط ۶ پله (--t-1 … --t-6) + تیتر بزرگ (--t-hero). عدد px جدید ننویس.
+   - گوشه: --r-xs (نوار باریک) / --r-sm (چیپ، دکمه‌ی کوچیک) / --r-md (کارت، کادر) / --r-lg (بخش بزرگ، برگه) / --r-pill.
+   - فاصله: --s-1 … --s-6 (۴، ۸، ۱۲، ۱۶، ۲۴، ۳۲).
+   - رنگ معنی‌دار: --ok، --warn، --bad، --info، --live، --rare. رنگ هگز جدید تو CSS صفحه‌ها ننویس.
+   - رنگ خونه: --hub / --hub2 / --on-hub / --hub-soft / --hub-line. هر خونه‌ی هیکاری (src/hubs.js) رنگ خودشو داره و
+     سرور روی <body> می‌نویسه data-hub="air|cards|…"؛ هر چیزی که «انتخاب‌شده / فعال / مهم» این صفحه‌ست با --hub رنگ می‌گیره،
+     پس آدم بدون خوندن می‌فهمه کجای سایته.
+   قطعه‌های آماده با پیشوند ds-: ds-btn، ds-chip، ds-card، ds-tabs، ds-empty، ds-badge.
+   سبک: فقط متغیر و چندتا کلاس؛ هیچ انیمیشن و فونت و عکسی نداره (~۲KB). */
+:root{
+  --t-1:11px;--t-2:12.5px;--t-3:14px;--t-4:16px;--t-5:20px;--t-6:26px;--t-hero:clamp(28px,3.4vw,40px);
+  --r-xs:4px;--r-sm:10px;--r-md:14px;--r-lg:20px;--r-pill:999px;
+  --s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:24px;--s-6:32px;
+  --ok:#3DDC84;--warn:#F5B544;--bad:#EF5B6B;--info:#3DB4F2;--live:#FF3B5C;--rare:#A48BFF;
+  --hub:#3DB4F2;--hub2:#1E97D8;--on-hub:#04121E;
+  --hub-soft:color-mix(in srgb,var(--hub) 14%,var(--fg,#151F2E));
+  --hub-line:color-mix(in srgb,var(--hub) 45%,var(--line,#23324A));
+  --elev-1:0 1px 0 rgba(255,255,255,.03) inset,0 10px 26px -18px rgba(0,0,0,.6);
+  --elev-2:0 24px 50px -28px rgba(0,0,0,.75);
+}
+/* رنگ هر خونه: همون رنگ‌های نقشه‌ی نو (hubs.js HCOL)، اولی روشن‌تر برای متن و دکمه، دومی عمیق‌تر برای پس‌زمینه */
+body[data-hub="home"]{--hub:#3DB4F2;--hub2:#1E97D8}
+body[data-hub="find"]{--hub:#4FB4FF;--hub2:#2D7CF0}
+body[data-hub="air"]{--hub:#3ED6B0;--hub2:#1A9C8E}
+body[data-hub="top"]{--hub:#FFBE4A;--hub2:#EE8424}
+body[data-hub="cards"]{--hub:#AE8BFF;--hub2:#7556F0}
+body[data-hub="play"]{--hub:#FF6F91;--hub2:#E3436A}
+body[data-hub="social"]{--hub:#7C8CFF;--hub2:#4C5CE8}
+body[data-hub="make"]{--hub:#FF8A4C;--hub2:#E5582C}
+body[data-hub="shop"]{--hub:#3BD47A;--hub2:#1E9E57}
+/* تم روشن: همون رنگ ولی کمی تیره‌تر که روی سفید خونده بشه */
+html:not([data-theme="dark"]) body[data-hub]{--hub-ink:color-mix(in srgb,var(--hub) 72%,#000)}
+html[data-theme="dark"] body[data-hub],body[data-hub]{--hub-ink:var(--hub)}
+@media (prefers-color-scheme:dark){html:not([data-theme="light"]) body[data-hub]{--hub-ink:var(--hub)}}
+
+/* ---------- قطعه‌های آماده ---------- */
+.ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--s-2);height:42px;padding:0 var(--s-4);border-radius:var(--r-sm);border:1px solid var(--line);background:var(--fg);color:var(--strong);font:700 var(--t-3) var(--font);text-decoration:none;cursor:pointer;transition:border-color .15s,background .15s}
+.ds-btn:hover{border-color:var(--hub-line)}
+.ds-btn.pri{background:var(--hub);border-color:var(--hub);color:var(--on-hub)}
+.ds-btn.pri:hover{background:var(--hub2);border-color:var(--hub2);color:#fff}
+.ds-btn.sm{height:34px;padding:0 var(--s-3);font-size:var(--t-2)}
+.ds-chip{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 var(--s-3);border-radius:var(--r-pill);border:1px solid var(--line);background:var(--fg);color:var(--text);font:700 var(--t-2) var(--font);cursor:pointer}
+.ds-chip.on{background:var(--hub-soft);border-color:var(--hub-line);color:var(--strong)}
+.ds-card{border-radius:var(--r-md);background:var(--fg);border:1px solid var(--line);box-shadow:var(--elev-1)}
+.ds-badge{display:inline-block;padding:2px 8px;border-radius:var(--r-pill);background:var(--hub-soft);color:var(--hub-ink);font:800 var(--t-1)/1.6 var(--font);font-style:normal}
+.ds-empty{padding:var(--s-6) var(--s-4);text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:var(--r-md);line-height:2}
+.ds-tabs{display:flex;gap:var(--s-1);padding:var(--s-1);border-radius:var(--r-md);background:var(--fg);border:1px solid var(--line)}
+.ds-tabs>*{flex:1;display:flex;align-items:center;justify-content:center;gap:var(--s-2);height:40px;border-radius:var(--r-sm);color:var(--text);font:700 var(--t-3) var(--font);text-decoration:none}
+.ds-tabs>.on{background:var(--hub);color:var(--on-hub)}
+/* نوار خونه‌ها (src/hubs.js) هم رنگ خونه رو می‌گیره: تب فعال و آیکن خونه */
+body[data-hub] .hkh:not(.hkh2) .hkh-tabs a.on{background:var(--hub);color:var(--on-hub)}
+body[data-hub] .hkh:not(.hkh2) .hkh-home svg{color:var(--hub)}
+/* منوی بالا و نوار پایین گوشی: خونه‌ای که توشی با رنگ خودش روشنه */
+body[data-hub] .nav.solid .links a.on{color:var(--hub-ink);background:var(--hub-soft)}
+body[data-hub] .tabbar a.on{color:var(--hub-ink)}

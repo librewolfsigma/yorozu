@@ -1,0 +1,117 @@
+/* ✨ صفحه‌ی اول، نسخه‌ی مرتب‌تر (html[data-hx]) — فقط ظاهر؛ هیچ بخشی اضافه یا کم نشده.
+   همه‌چیز با رنگ‌های خود سایت (روشن/تیره) و بدون انیمیشن سنگین؛ حالت سبک = بی‌حرکت. */
+html[data-hx]{--hx-a:#3DB4F2;--hx-b:#8B5CF6}
+
+/* ---------- بالای صفحه، مهمون: یه پرده‌ی سینما ---------- */
+html[data-hx] .lb{min-height:600px;padding:0 0 128px;margin-bottom:0;align-items:flex-end}
+html[data-hx] .lb::before{background:
+  linear-gradient(270deg,rgba(7,11,22,.9) 0%,rgba(7,11,22,.62) 34%,rgba(7,11,22,.18) 64%,rgba(7,11,22,.35) 100%),
+  linear-gradient(180deg,rgba(7,11,22,.55) 0%,transparent 26%,transparent 58%,rgba(7,11,22,.7) 100%)}
+html[data-hx] .lb::after{content:"";position:absolute;inset:auto 0 0;height:110px;z-index:-1;background:linear-gradient(180deg,transparent,var(--bg))}
+html[data-hx] .lb.ok .lb-bg{animation:hxKb 38s ease-in-out infinite alternate}
+@keyframes hxKb{from{transform:scale(1.02)}to{transform:scale(1.1) translateX(-1.5%)}}
+html[data-hx] .lb-in{text-align:right;max-width:1140px}
+html[data-hx] .lb-in>*{max-width:600px}
+html[data-hx] .lb-h{margin:0 0 26px;font:600 clamp(16px,1.35vw,19px)/2 Vazirmatn,sans-serif;color:rgba(255,255,255,.86);text-shadow:0 2px 18px rgba(0,0,0,.55)}
+html[data-hx] .lb-in{width:100%}
+html[data-hx] .hx-l1{display:block;margin-bottom:6px;font:400 clamp(40px,4.4vw,60px)/1.45 Lalezar,var(--font);color:#fff;text-wrap:balance}
+html[data-hx] .hx-l2{display:block}
+html[data-hx] .lb-act{justify-content:flex-start;gap:12px}
+html[data-hx] .lb-go{height:54px;padding:0 26px 0 22px;gap:10px;border-radius:16px;color:#fff;font-size:16px;background:linear-gradient(100deg,var(--hx-a),var(--hx-b));box-shadow:0 14px 34px -12px rgba(110,110,255,.9),inset 0 1px 0 rgba(255,255,255,.25)}
+html[data-hx] .lb-go::after{content:"";width:18px;height:18px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 12H5m6-6-6 6 6 6'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 12H5m6-6-6 6 6 6'/%3E%3C/svg%3E") center/contain no-repeat;transition:transform .2s}
+html[data-hx] .lb-go:hover{background:linear-gradient(100deg,#5cc4f7,#9d74ff)}
+html[data-hx] .lb-go:hover::after{transform:translateX(-4px)}
+html[data-hx] .lb-sub{font-size:13.5px;color:rgba(255,255,255,.7)}
+html[data-hx] .lb-cap{bottom:128px;left:24px;padding:5px 11px;border-radius:99px;background:rgba(0,0,0,.35);color:rgba(255,255,255,.75);backdrop-filter:blur(6px)}
+/* the dock floats over the bottom of the picture */
+html[data-hx] .lb + main .filters{margin-top:-74px}
+
+/* ---------- بالای صفحه، عضو ---------- */
+html[data-hx] .sp-h{font:400 clamp(28px,3vw,40px)/1.4 Lalezar,var(--font)}
+
+/* ---------- جستجو + جعبه‌ابزار = یه «داک» ---------- */
+@media (min-width:761px){
+  html[data-hx] main .filters{border-radius:22px 22px 0 0;box-shadow:0 18px 40px -26px rgba(20,30,60,.45);padding:14px 16px}
+  html[data-hx] main .filters:has(+ .tbx){box-shadow:none}
+  html[data-hx] main .filters + .tbx{margin-top:0;border-radius:0 0 22px 22px;background:var(--fg);box-shadow:0 22px 44px -28px rgba(20,30,60,.5),inset 0 1px 0 var(--line);padding:12px 14px 14px}
+  html[data-hx] .tbx-h b{font-size:19px}
+  html[data-hx] .tbx-r{grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+  html[data-hx] .tbx-t{padding:8px}
+  html[data-hx] .tbx-ic{width:40px;height:40px;border-radius:13px}
+}
+@media (min-width:761px) and (max-width:1099px){html[data-hx] .tbx-r{grid-template-columns:repeat(5,minmax(0,1fr))}}
+/* «جدید» = a small dot, not nine orange pills shouting at once */
+html[data-hx] .tbx-t.new .tbx-ic::after{content:"";top:-3px;left:-3px;right:auto;width:11px;height:11px;padding:0;border-radius:50%;background:#FF8A3D;box-shadow:0 0 0 2.5px var(--fg)}
+
+/* the cards bar under the dock */
+html[data-hx] .kd-strip{margin-top:14px;border-radius:16px}
+
+/* ---------- عنوان بخش‌ها: یه شکل برای همه ---------- */
+html[data-hx] .home{padding-top:36px;padding-bottom:28px}
+html[data-hx] #sections>.sec{margin:0 0 68px}
+html[data-hx] #sections>.sec:last-child{margin-bottom:24px}
+html[data-hx] #sections .sec-h{align-items:flex-end;gap:12px 16px;margin-bottom:22px}
+html[data-hx] .hx-t{min-width:0;margin-inline-end:auto}
+html[data-hx] .hx-t h2,html[data-hx] #sections .hx-t h2{display:flex;align-items:center;gap:10px;margin:0;font:400 clamp(25px,2.3vw,31px)/1.35 Lalezar,var(--font);color:var(--strong)}
+html[data-hx] .hx-t h2::before{content:"";flex:none;width:6px;height:.82em;border-radius:4px;background:linear-gradient(180deg,var(--hx-a),var(--hx-b))}
+.hx-sub{margin:3px 0 0;padding-inline-start:16px;font-size:13.5px;line-height:1.8;color:var(--muted)}
+
+/* ---------- داغ‌ترین‌ها: شماره‌ی بزرگ روی پوسترها ---------- */
+html[data-hx] #tp .grid{counter-reset:hx;gap:26px 20px}
+html[data-hx] #tp .grid .m{counter-increment:hx;container-type:inline-size;transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+html[data-hx] #tp .grid .m:hover{transform:translateY(-5px)}
+html[data-hx] #tp .grid .m:hover .art,html[data-hx] #tp .grid .m:focus-visible .art{transform:none;box-shadow:0 18px 34px -16px rgba(10,20,40,.55)}
+html[data-hx] #tp .grid .m::after{content:"";position:absolute;inset:auto 0 auto 0;top:90cqw;height:60cqw;border-radius:0 0 var(--r) var(--r);background:linear-gradient(180deg,transparent,rgba(6,10,20,.82));pointer-events:none}
+/* (۲۳ مهر) مالک: عدد روی پوسترها معنی نمی‌ده؛ حذف شد */ /*html[data-hx] #tp .grid .m::before{content:counter(hx,persian);position:absolute;z-index:2;top:calc(150cqw - 54cqw);inset-inline-end:10cqw;font:400 52cqw/1 Lalezar,var(--font);color:#fff;text-shadow:0 4px 18px rgba(0,0,0,.55);pointer-events:none} */
+html[data-hx] #tp .grid .m:has(.ssr-l)::before,html[data-hx] #tp .grid .m:has(.ssr-l)::after{content:none}
+html[data-hx] #tp .m .badge{display:flex;flex-direction:column;align-items:flex-start;gap:0;top:8px;inset-inline-start:8px;padding:4px 9px;border-radius:10px;background:rgba(8,12,24,.72);line-height:1.5;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+html[data-hx] #tp .m .badge b{display:flex;align-items:center;gap:5px;font-size:11.5px}
+html[data-hx] #tp .m .badge b::before{content:"";width:6px;height:6px;border-radius:50%;background:#4ADE80;box-shadow:0 0 8px #4ADE80}
+html[data-hx] #tp .m .badge i{display:block;margin:0;font-size:10.5px;opacity:.75}
+html[data-hx] #tp .m .t{margin-top:10px;font-weight:700}
+html[data-hx] .tp-all{display:inline-flex;align-items:center;gap:4px;height:34px;padding:0 14px;border-radius:11px;background:var(--fg);box-shadow:inset 0 0 0 1px var(--line);color:var(--strong)}
+html[data-hx] .tp-all:hover{color:var(--hx-a)}
+
+/* ---------- ۱۰۰ برتر ---------- */
+html[data-hx] .t1-how{margin-top:12px;text-align:center}
+
+/* ---------- نبض هیکاری: یه نوار عدد به‌جای شش جعبه‌ی ایموجی‌دار ---------- */
+
+@keyframes hxPing{70%,100%{box-shadow:0 0 0 9px transparent}}
+
+/* ---------- owner preview pill ---------- */
+.hx-pv{position:fixed;z-index:9800;top:74px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100% - 24px);padding:6px 6px 6px 14px;border-radius:99px;background:rgba(14,20,36,.92);color:#fff;font-size:12.5px;font-weight:700;box-shadow:0 12px 30px -10px rgba(0,0,0,.5);backdrop-filter:blur(8px)}
+.hx-pv span{padding-inline-start:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hx-pv button,.hx-pv a{flex:none;height:30px;padding:0 12px;border:0;border-radius:99px;font:800 12px var(--font);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
+.hx-pv button{color:#fff;background:linear-gradient(100deg,var(--hx-a,#3DB4F2),var(--hx-b,#8B5CF6))}
+.hx-pv a{color:#fff;background:rgba(255,255,255,.12)}
+
+/* ---------- گوشی ---------- */
+@media (max-width:760px){
+  html[data-hx] .lb{min-height:520px;padding-bottom:96px}
+  html[data-hx] .lb-in{text-align:center}
+  html[data-hx] .lb-in>*{margin-inline:auto}
+  html[data-hx] .lb-h{font-size:15.5px;line-height:1.95;margin-bottom:22px}
+  html[data-hx] .hx-l1{font-size:32px;line-height:1.5}
+  html[data-hx] .lb-act{justify-content:center}
+  html[data-hx] .lb::before{background:linear-gradient(180deg,rgba(7,11,22,.45) 0%,rgba(7,11,22,.25) 30%,rgba(7,11,22,.78) 72%,rgba(7,11,22,.9) 100%)}
+  html[data-hx] .lb-cap{bottom:auto;top:76px;left:12px}
+  html[data-hx] .lb + main .filters{margin-top:-56px}
+  html[data-hx] main .filters{border-radius:18px;padding:10px}
+  html[data-hx] .home{padding-top:34px}
+  html[data-hx] #sections>.sec{margin:0 0 52px}
+  html[data-hx] .hx-t h2,html[data-hx] #sections .hx-t h2,html[data-hx] #pulse2 .hx-t h2{font-size:25px}
+  html[data-hx] .hx-sub{font-size:12.5px}
+  /* hot posters: one swipeable row instead of two rows of three */
+  html[data-hx] #tp .grid{grid-auto-flow:column;grid-template-columns:none;grid-auto-columns:42%;gap:14px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;margin:0 -20px;padding:2px 20px 8px;scrollbar-width:none}
+  html[data-hx] #tp .grid::-webkit-scrollbar{display:none}
+  html[data-hx] #tp .grid .m{scroll-snap-align:start}
+  html[data-hx] #tp .sec-h{flex-wrap:wrap}
+  html[data-hx] #tp .hx-t{flex-basis:100%}
+  html[data-hx] .plk{padding:14px 6px 12px}
+  html[data-hx] .plk b{font-size:27px}
+  .hx-pv{top:auto;bottom:calc(76px + env(safe-area-inset-bottom));font-size:11.5px}
+  .hx-pv span{max-width:44vw}
+}
+html.lite[data-hx] .lb.ok .lb-bg{animation:none}
+@media (prefers-reduced-motion:reduce){html[data-hx] .lb.ok .lb-bg{animation:none}html[data-hx] #tp .grid .m{transition:none}}

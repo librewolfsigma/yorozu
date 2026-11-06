@@ -1,0 +1,254 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
+  --color-hub: var(--hub);
+  --color-hub-soft: var(--hub-soft);
+}
+
+/*
+ * Yozora design language — inspired by the publicly observable aesthetic of
+ * myhikari.in (see docs/recon/hikari-design.md): near-black navy base, one
+ * surface step, hairline borders, 3-step text ramp, electric accent, per-section
+ * hub colors. Original code and assets.
+ */
+:root {
+  --radius: 0.875rem;
+  --background: #0B1622;
+  --foreground: #E4EDF6;
+  --card: #151F2E;
+  --card-foreground: #E4EDF6;
+  --popover: #151F2E;
+  --popover-foreground: #E4EDF6;
+  --primary: #3DB4F2;
+  --primary-foreground: #04121E;
+  --secondary: #1B2A3D;
+  --secondary-foreground: #E4EDF6;
+  --muted: #1A2434;
+  --muted-foreground: #6C8299;
+  --accent: #1B2A3D;
+  --accent-foreground: #E4EDF6;
+  --destructive: #EF5B6B;
+  --border: #23324A;
+  --input: #23324A;
+  --ring: #3DB4F2;
+  --chart-1: #3DB4F2;
+  --chart-2: #AE8BFF;
+  --chart-3: #3ED6B0;
+  --chart-4: #FFBE4A;
+  --chart-5: #FF6F91;
+  --sidebar: #0e1a28;
+  --sidebar-foreground: #9FADBD;
+  --sidebar-primary: #3DB4F2;
+  --sidebar-primary-foreground: #04121E;
+  --sidebar-accent: #1B2A3D;
+  --sidebar-accent-foreground: #E4EDF6;
+  --sidebar-border: #23324A;
+  --sidebar-ring: #3DB4F2;
+  --hub: #3DB4F2;
+  --hub-soft: color-mix(in srgb, var(--hub) 14%, #151F2E);
+  --font-body: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.font-display {
+  font-family: "Lalezar", "Baloo 2", var(--font-body);
+  letter-spacing: 0.01em;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 15px;
+    line-height: 1.65;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--hub) 30%, transparent);
+  }
+}
+
+/* ── Scrollbars ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #23324A transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #23324A;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #31435f;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ── Hikari-style chrome ── */
+.glass-header {
+  background: rgba(21, 31, 46, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.hero-aurora {
+  position: relative;
+}
+.hero-aurora::before,
+.hero-aurora::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.hero-aurora::before {
+  background: radial-gradient(ellipse 60% 55% at 22% 48%, rgba(139, 92, 246, 0.22), transparent 70%);
+}
+.hero-aurora::after {
+  background: radial-gradient(ellipse 50% 50% at 80% 30%, rgba(61, 180, 242, 0.14), transparent 70%);
+}
+
+.cta-gradient {
+  background: linear-gradient(100deg, var(--hub, #3DB4F2), #8B5CF6);
+  color: #fff;
+  box-shadow:
+    0 16px 36px -14px rgba(110, 110, 255, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.cta-gradient:hover {
+  filter: brightness(1.08);
+}
+
+.hub-soft {
+  background: color-mix(in srgb, var(--hub) 14%, #151F2E);
+}
+.hub-text {
+  color: var(--hub);
+}
+.hub-ring {
+  border-color: color-mix(in srgb, var(--hub) 45%, #23324A);
+}
+
+/* ── Poster cards (Hikari motion budget) ── */
+.poster-card {
+  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.poster-card:hover {
+  transform: translateY(-3px);
+}
+.poster-card .poster-img {
+  transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.poster-card:hover .poster-img {
+  transform: scale(1.05);
+}
+.press-scale {
+  transition: transform 0.15s ease;
+}
+.press-scale:active {
+  transform: scale(0.97);
+}
+
+.card-ring {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 10px 26px -18px rgba(0, 0, 0, 0.6);
+}
+.card-ring-lg {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 24px 50px -28px rgba(0, 0, 0, 0.75);
+}
+
+/* ── Shimmer skeletons ── */
+@keyframes yz-shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.yz-skeleton {
+  background: linear-gradient(90deg, #141d2b 25%, #1b2739 37%, #141d2b 63%);
+  background-size: 800px 100%;
+  animation: yz-shimmer 1.4s ease infinite;
+}
+
+/* ── Ambient animations (budget: 2) ── */
+@keyframes yz-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.yz-float {
+  animation: yz-float 5s ease-in-out infinite;
+}
+
+@keyframes yz-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.yz-pulse-dot {
+  animation: yz-pulse-dot 2.2s ease-in-out infinite;
+}
+
+/* ── Reader ── */
+.reader-page-img {
+  display: block;
+  max-width: 100%;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
