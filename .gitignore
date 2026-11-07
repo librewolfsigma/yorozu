@@ -58,3 +58,6 @@ server.log
 db/
 .zscripts/
 tool-results/
+
+# user-uploaded scratch files
+upload/
