@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   Play, BookOpen, Image as ImageIcon, Info, Star, ShieldAlert,
-  ExternalLink, PlayCircle, MessagesSquare, LayoutGrid, Puzzle, Zap,
+  ExternalLink, PlayCircle, MessagesSquare, LayoutGrid, Puzzle, Zap, AlertTriangle,
 } from "lucide-react";
 import { api } from "@/lib/client-api";
 import { categoryMeta, fmtDuration, STATUS_LABELS, fmtNumber, videoKindLabel } from "@/lib/category-meta";
@@ -50,6 +50,7 @@ interface WorkDetail {
   reviews: ReviewItem[];
   library: LibraryState | null;
   myCollections: { id: string; name: string; hasItem: boolean }[];
+  detailError: string | null;
   ref: string;
 }
 
@@ -98,7 +99,7 @@ export default function DetailView({ provider, id }: { provider?: string | null;
     );
   }
 
-  const { work, units, provider: prov } = data;
+  const { work, units, provider: prov, detailError } = data;
   const meta = categoryMeta(work.category);
   const hub = work.accent || meta.hub;
   const Icon = meta.icon;
@@ -132,6 +133,14 @@ export default function DetailView({ provider, id }: { provider?: string | null;
 
   return (
     <div className="-mx-4 lg:-mx-5" style={{ ["--hub" as string]: hub }}>
+      {/* metadata reliability — a failed details call never kills the page;
+          identity + playable units stay servable and the error shows here */}
+      {detailError && (
+        <p className="mx-4 mt-4 flex items-start gap-1.5 rounded-lg border border-[#FFBE4A]/30 bg-[#FFBE4A]/10 p-3 text-xs text-foreground/85 lg:mx-5">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#FFBE4A]" />
+          <span>Partial metadata — {detailError} The title's playable units may still work; try again for full details.</span>
+        </p>
+      )}
       {/* ── Themed hero ── */}
       <div className="relative overflow-hidden">
         <div

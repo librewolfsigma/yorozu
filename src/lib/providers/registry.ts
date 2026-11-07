@@ -25,8 +25,8 @@ export interface ProviderDef {
 export const PROVIDER_REGISTRY: ProviderDef[] = [
   {
     id: "anilist", name: "AniList", category: "ANIME",
-    description: "Anime metadata from AniList's official public GraphQL API (docs.anilist.co). Adult titles only (genre: Hentai). Real cover art, scores, studios, episode counts. Metadata provider — playback links out to your own sources; no streams are faked.",
-    version: "1.0.0", author: "yozora-labs", homepage: "https://docs.anilist.co",
+    description: "Anime metadata from AniList's official public GraphQL API (docs.anilist.co). Adult titles only (genre: Hentai). Real cover art, scores, studios, episode counts. Metadata provider — playback comes from the streaming sources (HentaiOcean, NSFW-API); no streams are faked.",
+    version: "1.1.0", author: "yozora-labs", homepage: "https://docs.anilist.co",
     capabilities: ["search", "details", "discover", "health"],
     configSchema: [],
   },
@@ -119,15 +119,15 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
   },
   {
     id: "eporner", name: "EPorner", category: "AV",
-    description: "Official public JSON API (eporner.com/api/v2 — keyless) plus the site's player XHR for direct MP4 playback. Discover rail is PMV-tuned; search covers the full catalog including hentai. No account required.",
-    version: "1.0.0", author: "yozora-labs", homepage: "https://www.eporner.com/api/",
+    description: "Official public JSON API (eporner.com/api/v2 — keyless) plus the site's player XHR for direct MP4 playback. Serves the general AV pool (All video); per user directive the dedicated PMV tab is PMVHaven-only and this source is scoped out of it.",
+    version: "1.1.0", author: "yozora-labs", homepage: "https://www.eporner.com/api/",
     capabilities: ["search", "details", "discover", "scenes", "streams", "health"],
     configSchema: [],
   },
   {
     id: "pmvhaven", name: "PMVHaven", category: "AV",
-    description: "The dedicated PMV/HMV community platform — public keyless browse API (tags, sorting, pagination) with DIRECT MP4 playback from its own storage. Text search needs a platform key upstream, so it is honestly absent. Subcategory: PMV (HMV rail served from the same source).",
-    version: "1.0.0", author: "yozora-labs", homepage: "https://pmvhaven.com",
+    description: "The dedicated PMV platform — public keyless browse API (tags, sorting, pagination) with DIRECT MP4 playback from its own storage. USER DIRECTIVE: the PMV slice is served by PMVHaven exclusively. Text search needs a platform key upstream, so it is honestly absent.",
+    version: "1.1.0", author: "yozora-labs", homepage: "https://pmvhaven.com",
     capabilities: ["discover", "details", "scenes", "streams", "health"],
     configSchema: [],
   },
@@ -202,13 +202,6 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     configSchema: [],
   },
   {
-    id: "anidb", name: "AniDB (titles + crosswalk)", category: "ANIME",
-    description: "AniDB's public anime-titles export (anidb.net/api/anime-titles.xml.gz). Provides title search and powers the scheduled AniDB↔catalog ID crosswalk (ProviderLink rows for dedup and 'open on AniDB' links). Full AniDB metadata needs a registered API client and is NOT integrated.",
-    version: "1.0.0", author: "yozora-labs", homepage: "https://wiki.anidb.net/HTTP_API_Definition",
-    capabilities: ["search", "details", "health", "idmap"],
-    configSchema: [],
-  },
-  {
     id: "stashdb", name: "StashDB", category: "AV",
     description: "Community scene/performer/studio metadata for WESTERN studio scenes via the official stash-box GraphQL API (docs.stashapp.cc). REQUIRES A FREE API KEY (stashdb.org → account settings) — there is no public no-key path upstream. Metadata only. Subcategory: WESTERN.",
     version: "1.0.0", author: "yozora-labs", homepage: "https://docs.stashapp.cc",
@@ -219,7 +212,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
   },
   {
     id: "javstash", name: "JAVStash", category: "AV",
-    description: "JAV-specialized stash-box instance (javstash.org) — scene metadata keyed to JAV releases. Same official GraphQL API and free-key gate as StashDB. Subcategory: JAV (kept distinct from AV/PMV/HMV by design).",
+    description: "JAV-specialized stash-box instance (javstash.org) — scene metadata keyed to JAV releases. Same official GraphQL API and free-key gate as StashDB. Subcategory: JAV (kept distinct from PMV/HMV slices by design).",
     version: "1.0.0", author: "yozora-labs", homepage: "https://javstash.org",
     capabilities: ["search", "details", "discover", "health", "metadata"],
     configSchema: [
@@ -237,11 +230,48 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
   },
   {
     id: "pmvstash", name: "PMV Stash", category: "AV",
-    description: "PMV/HMV (edited music-video compilation) scene metadata via the official stash-box GraphQL API. Free API key required. Subcategory: PMV — never merged into general AV or Anime.",
-    version: "1.0.0", author: "yozora-labs", homepage: "https://pmvstash.org",
+    description: "PMV/HMV (edited music-video compilation) scene metadata via the official stash-box GraphQL API. Free API key required. Per user directive the dedicated PMV tab is PMVHaven-only — this metadata source stays in the general AV pool once configured.",
+    version: "1.1.0", author: "yozora-labs", homepage: "https://pmvstash.org",
     capabilities: ["search", "details", "discover", "health", "metadata"],
     configSchema: [
       { key: "apiKey", label: "PMV Stash API key", type: "string", required: true, help: "pmvstash.org → account settings → API key." },
+    ],
+  },
+  {
+    id: "iwara", name: "Iwara", category: "AV",
+    description: "Iwara — THE HMV community platform (api.iwara.tv, keyless guest access). Video listings with date/likes/views sorting and pagination; per-video detail returns the platform's own signed direct MP4. Guest search is not offered by the API upstream, so it is honestly absent. USER DIRECTIVE: the HMV slice = HMVmania + Iwara ONLY.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://www.iwara.tv",
+    capabilities: ["discover", "details", "scenes", "streams", "health"],
+    configSchema: [],
+  },
+  {
+    id: "hmvmania", name: "HMVmania", category: "AV",
+    description: "HMVmania — the dedicated HMV community site (hmvmania.com). 2D-videos index with pagination and per-video pages exposing the site's own hosted MP4 played directly (the site's WordPress search does not index videos, so text search is honestly absent). USER DIRECTIVE: the HMV slice = HMVmania + Iwara ONLY.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://hmvmania.com",
+    capabilities: ["discover", "details", "scenes", "streams", "health"],
+    configSchema: [],
+  },
+  {
+    id: "nhentai", name: "nhentai", category: "MANGA",
+    description: "nhentai's official public JSON API v2 (nhentai.net/api/v2 — keyless): paged galleries, text search, popular listing and real in-app reading from the site's own image servers (documented /cdn endpoint). Galleries carry their own category tags (manga / doujinshi); user-assigned MANGA source.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://nhentai.net/api/v2/docs",
+    capabilities: ["search", "details", "discover", "chapters", "pages", "read", "health"],
+    configSchema: [],
+  },
+  {
+    id: "hentaiocean", name: "HentaiOcean", category: "ANIME",
+    description: "HentaiOcean streaming — documented public API (hentaiocean.com/api fetch-by-slug), site RSS for browse, site search, and the site's own embed player resolved to its direct MP4 mirror (verified). USER DIRECTIVE: anime gets STREAMING sources — HentaiOcean is the primary.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://hentaiocean.com/api-docs",
+    capabilities: ["search", "details", "discover", "scenes", "streams", "health"],
+    configSchema: [],
+  },
+  {
+    id: "nsfwapi", name: "NSFW-API (aggregator)", category: "ANIME",
+    description: "NSFW-API aggregator (github.com/Varomine/NSFW-API) — self-hostable Bun/Hono service wrapping several hentai providers behind unified search + watch. Uses the documented public instance by default; the public upstreams are intermittent, so point baseUrl (in config) at your own deployment for full reliability. Failures surface honestly.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://github.com/Varomine/NSFW-API",
+    capabilities: ["search", "details", "discover", "scenes", "streams", "health"],
+    configSchema: [
+      { key: "baseUrl", label: "API base URL", type: "string", help: "Your NSFW-API deployment (default: the repo's public Workers instance)." },
     ],
   },
 ];

@@ -19,8 +19,9 @@ import { cached, TTL } from "@/lib/cache";
 
 const CAN_WATCH = new Set([
   "rule34video", "xvideos", "eporner", "hanime", "pmvhaven", "r18dev",
+  "iwara", "hmvmania", "hentaiocean", "nsfwapi",
 ]);
-const CAN_READ = new Set(["mangadex", "ehentai", "manga18fx"]);
+const CAN_READ = new Set(["mangadex", "ehentai", "manga18fx", "nhentai"]);
 const CAN_VIEW = new Set(["e621", "e621-pools", "yandere", "hypnohub", "gelbooru"]);
 
 /**
@@ -44,6 +45,10 @@ function capabilitiesFor(def: ProviderDef): { watch: boolean; read: boolean; vie
  * Fixed AV subcategory per provider. AV and JAV are THE SAME category
  * (user-corrected taxonomy): Japanese Adult Video. Distinct slices that
  * remain: WESTERN scenes, CREATOR clips, PMV/HMV edits, HENTAI animation.
+ *
+ * USER DIRECTIVE (2026-11): PMV = PMVHaven ONLY; HMV = HMVmania + Iwara ONLY.
+ * EPorner and PMV Stash stay in the general AV pool (All video) but are
+ * scoped out of the dedicated PMV tab.
  */
 export const PROVIDER_VIDEO_KIND: Record<string, string> = {
   javdb: "JAV",
@@ -53,8 +58,8 @@ export const PROVIDER_VIDEO_KIND: Record<string, string> = {
   stashdb: "WESTERN",
   fansdb: "CREATOR",
   pmvhaven: "PMV",
-  pmvstash: "PMV",
-  eporner: "PMV", // rail tuned to PMV search; search covers everything
+  hmvmania: "HMV",
+  iwara: "HMV",
   rule34video: "HENTAI",
   hanime: "HENTAI",
 };
@@ -345,13 +350,9 @@ export async function discoverCategory(category: string, kind?: string) {
   const { installed } = await listProviders();
   let scope = installed.filter((p) => p.category === category);
   if (kind) {
-    if (kind === "HMV") {
-      // HMV edits live on PMV platforms alongside PMV — pmvhaven serves its
-      // HMV rail via opts.kind; pmvstash (key-gated) keeps PMV listing.
-      scope = scope.filter((p) => PROVIDER_VIDEO_KIND[p.id] === "PMV");
-    } else {
-      scope = scope.filter((p) => PROVIDER_VIDEO_KIND[p.id] === kind);
-    }
+    // USER DIRECTIVE: HMV is its own slice served by HMV-kind providers
+    // (HMVmania + Iwara) — no cross-mapping to PMV platforms anymore.
+    scope = scope.filter((p) => PROVIDER_VIDEO_KIND[p.id] === kind);
   }
 
   const rails: { providerId: string; providerName: string; videoKind: string | null; items: WorkDTO[]; error: string | null }[] = [];
@@ -402,11 +403,8 @@ export async function feedCategory(opts: {
   const { installed } = await listProviders();
   let scope = installed.filter((p) => p.category === opts.category);
   if (opts.kind) {
-    if (opts.kind === "HMV") {
-      scope = scope.filter((p) => PROVIDER_VIDEO_KIND[p.id] === "PMV");
-    } else {
-      scope = scope.filter((p) => PROVIDER_VIDEO_KIND[p.id] === opts.kind);
-    }
+    // HMV keeps its own providers (hmvmania + iwara) — see PROVIDER_VIDEO_KIND.
+    scope = scope.filter((p) => PROVIDER_VIDEO_KIND[p.id] === opts.kind);
   }
 
   const registry = await getRegistryDefs();
@@ -476,18 +474,23 @@ export async function getWork(providerId: string, externalId: string, opts?: { f
     toWorkDTO(i, { id: def.id, name: def.name, canWatch: availability.watch, canRead: availability.read, canView: availability.view });
 
   let work: WorkDTO | null = null;
+  let detailError: string | null = null;
   if (adapter?.details) {
     assertUsable(dto);
+    // METADATA RELIABILITY: a details failure must never kill the whole
+    // detail page — identity + units stay servable, the error surfaces as a
+    // warning banner instead of a hard 502.
     work = await cached("details", `${def.id}:${externalId}`, TTL.WORK, () =>
       adapter.details!(externalId, providerOpts(dto)).then((d) => (d ? mkDTO(d) : null)),
     ).catch((e) => {
-      if (e instanceof ApiError) throw e;
-      throw new ApiError(502, `${def.name}: ${e instanceof Error ? e.message : String(e)}`);
+      detailError = `${def.name}: ${e instanceof Error ? e.message : String(e)}`;
+      return null;
     });
   }
   if (!work) {
     // Honest minimal fallback for providers without per-item details
-    // (e.g. Moebooru boards): identity + capability only, no invented metadata.
+    // (e.g. Moebooru boards) or whose details call just failed: identity +
+    // capability only, no invented metadata.
     work = mkDTO({
       externalId,
       title: `Item ${externalId}`,
@@ -508,8 +511,8 @@ export async function getWork(providerId: string, externalId: string, opts?: { f
     // recovery uses it to force a genuinely NEW resolve (the cached token
     // may be the one that just died, e.g. after an egress IP rotation).
     units = opts?.freshUnits
-      ? await adapter.units!(externalId).catch(() => null)
-      : await cached("units", `${def.id}:${externalId}`, TTL.UNITS, () => adapter.units!(externalId)).catch(() => null);
+      ? await adapter.units!(externalId, providerOpts(dto)).catch(() => null)
+      : await cached("units", `${def.id}:${externalId}`, TTL.UNITS, () => adapter.units!(externalId, providerOpts(dto))).catch(() => null);
   }
 
   // "Popular on <provider>" rail (replaces the old local recommendations table)
@@ -520,8 +523,71 @@ export async function getWork(providerId: string, externalId: string, opts?: { f
       .catch(() => []);
   }
 
-  return { work, units, popular, provider: { id: def.id, name: def.name, status: dto.status, configRequired: dto.configRequired, availability } };
+  return { work, units, popular, detailError, provider: { id: def.id, name: def.name, status: dto.status, configRequired: dto.configRequired, availability } };
 }
+
+/**
+ * Paged single-provider browse (Mihon source screen): popular listing when no
+ * query, upstream text search otherwise. Every page is a live upstream fetch
+ * behind the TTL cache — this is the engine behind source-level infinite
+ * scroll (as opposed to feedCategory's multi-provider interleave).
+ */
+export async function providerBrowse(opts: { id: string; q?: string; page?: number }) {
+  const page = Math.max(1, opts.page ?? 1);
+  const q = (opts.q ?? "").trim();
+  const { def, dto, adapter } = await getProviderDTO(opts.id);
+  try {
+    assertUsable(dto);
+  } catch (e) {
+    // Config-gated sources answer honestly instead of erroring the route
+    return {
+      provider: { id: def.id, name: def.name, category: def.category, status: dto.status, configRequired: dto.configRequired },
+      items: [] as WorkDTO[],
+      page,
+      hasMore: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+  if (!adapter) {
+    return {
+      provider: { id: def.id, name: def.name, category: def.category, status: dto.status, configRequired: dto.configRequired },
+      items: [] as WorkDTO[],
+      page,
+      hasMore: false,
+      error: `${def.name} has no live adapter registered`,
+    };
+  }
+  const cap = capabilitiesFor(def);
+  let error: string | null = null;
+  let items: WorkDTO[] = [];
+  const fetcher = async (): Promise<LiveSearchItemX[]> => {
+    if (q) {
+      if (!adapter.search) throw new ApiError(501, `${def.name} has no text search upstream`);
+      return adapter.search(q, { page, ...providerOpts(dto) });
+    }
+    if (!adapter.popular) throw new ApiError(501, `${def.name} exposes no popular listing — use search`);
+    return adapter.popular({ page });
+  };
+  try {
+    const raw = await cached("source", `${def.id}:${q}:${page}`, TTL.RAILS, fetcher);
+    items = dedupeByRef(
+      raw
+        .filter((i) => i.externalId && i.title)
+        .slice(0, 40)
+        .map((i) => toWorkDTO(i, { id: def.id, name: def.name, canWatch: cap.watch, canRead: cap.read, canView: cap.view })),
+    );
+  } catch (e) {
+    error = e instanceof Error ? e.message : String(e);
+  }
+  return {
+    provider: { id: def.id, name: def.name, category: def.category, status: dto.status, configRequired: dto.configRequired },
+    items,
+    page,
+    hasMore: !error && items.length > 0,
+    error,
+  };
+}
+type LiveSearchItemX = Parameters<typeof toWorkDTO>[0];
 
 export async function resolvePages(providerId: string, sourceUrl: string): Promise<{ idx: number; imageUrl: string }[]> {
   const { def, dto, adapter } = await getProviderDTO(providerId);

@@ -9,7 +9,7 @@ import { api } from "@/lib/client-api";
 import { navigate } from "@/hooks/use-hash-route";
 import { useAuth } from "@/components/providers";
 import { MediaRail, MediaGrid, fromDTO, GridSkeleton, CoverImg } from "@/components/media/card";
-import { categoryMeta, CATEGORIES } from "@/lib/category-meta";
+import { categoryMeta, CATEGORIES, videoKindLabel } from "@/lib/category-meta";
 import type { WorkDTO } from "@/lib/serialize";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -40,6 +40,17 @@ interface ContinueItem {
   updatedAt: string;
 }
 
+interface ProviderLite {
+  id: string;
+  name: string;
+  category: string;
+  videoKind: string | null;
+  status: string;
+  installed: boolean;
+  configRequired: boolean;
+  availability: { watch: boolean; read: boolean; view: boolean };
+}
+
 interface HomeData {
   hero: WorkDTO[];
   popular: WorkDTO[];
@@ -55,6 +66,13 @@ export default function HomeView() {
   const { data, isLoading } = useQuery({
     queryKey: ["home"],
     queryFn: () => api<HomeData>("/api/home"),
+  });
+  // Provider-based home: the installed-source strip is the Mihon-style entry
+  // point — every source is one tap from the landing page.
+  const { data: provData } = useQuery({
+    queryKey: ["providers-installed"],
+    queryFn: () => api<{ installed: ProviderLite[] }>("/api/providers"),
+    staleTime: 120_000,
   });
   const { user } = useAuth();
   const [heroIdx, setHeroIdx] = useState(0);
@@ -155,6 +173,50 @@ export default function HomeView() {
             {data.continue.map((c) => (
               <ContinueCard key={c.ref} item={c} />
             ))}
+          </div>
+        </Section>
+      )}
+
+      {/* ── Your sources — the provider-based entry point (Mihon-style) ── */}
+      {(provData?.installed ?? []).filter((p) => p.installed).length > 0 && (
+        <Section title="Your sources" icon={<Puzzle className="h-4.5 w-4.5" />} href="/sources">
+          <div className="no-scrollbar -mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1">
+            {provData!.installed
+              .filter((p) => p.installed)
+              .slice(0, 24)
+              .map((p) => {
+                const m = categoryMeta(p.category);
+                const Icon = m.icon;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => navigate(`/source/${p.id}`)}
+                    className="group flex w-[150px] shrink-0 snap-start flex-col items-start gap-2 rounded-xl border border-border bg-card p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg press-scale"
+                    aria-label={`Open source ${p.name}`}
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg hub-soft" style={{ color: m.hub }}>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="line-clamp-1 text-[12.5px] font-bold">{p.name}</span>
+                    <span className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
+                      <span
+                        className={cn(
+                          "h-1.5 w-1.5 rounded-full",
+                          p.configRequired ? "bg-[#FFBE4A]" : p.status === "ERROR" ? "bg-[#EF5B6B]" : p.status === "ACTIVE" ? "bg-[#3BD47A]" : "bg-muted-foreground/40",
+                        )}
+                      />
+                      {p.videoKind ? videoKindLabel(p.videoKind) : m.label}
+                    </span>
+                  </button>
+                );
+              })}
+            <button
+              onClick={() => navigate("/sources")}
+              className="flex w-[110px] shrink-0 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ChevronRight className="h-5 w-5" />
+              <span className="text-[11.5px] font-bold">All sources</span>
+            </button>
           </div>
         </Section>
       )}

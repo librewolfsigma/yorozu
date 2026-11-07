@@ -12,7 +12,6 @@ import { sukebeiAnimeAdapter, sukebeiMangaAdapter } from "./sukebei";
 import { wotakuDatabasesAdapter, wotakuMiscAdapter, wotakuScriptsAdapter } from "./wotaku";
 import { mangadexAdapter } from "./mangadex";
 import { mangaupdatesAdapter } from "./mangaupdates";
-import { anidbAdapter } from "./anidb";
 import { fansDbAdapter, javStashAdapter, pmvStashAdapter, stashDbAdapter } from "./stashbox";
 import { xvideosAdapter } from "./xvideos";
 import { epornerAdapter } from "./eporner";
@@ -20,12 +19,16 @@ import { hanimeAdapter } from "./hanime";
 import { pmvhavenAdapter } from "./pmvhaven";
 import { r18devAdapter } from "./r18dev";
 import { javdbAdapter } from "./javdb";
+import { nhentaiAdapter } from "./nhentai";
+import { iwaraAdapter } from "./iwara";
+import { hmvmaniaAdapter } from "./hmvmania";
+import { hentaioceanAdapter } from "./hentaiocean";
+import { nsfwapiAdapter } from "./nsfwapi";
 import type { LiveAdapter } from "./types";
 import { getExtensionAdapter } from "../ext/repo";
 
 export const LIVE_ADAPTERS: Record<string, LiveAdapter> = {
   anilist: anilistAdapter,
-  anidb: anidbAdapter,
   e621: e621Adapter,
   "e621-pools": e621PoolsAdapter,
   yandere: yandereAdapter,
@@ -54,6 +57,11 @@ export const LIVE_ADAPTERS: Record<string, LiveAdapter> = {
   "wotaku-scripts": wotakuScriptsAdapter,
   "wotaku-misc": wotakuMiscAdapter,
   "wotaku-databases": wotakuDatabasesAdapter,
+  nhentai: nhentaiAdapter,
+  iwara: iwaraAdapter,
+  hmvmania: hmvmaniaAdapter,
+  hentaiocean: hentaioceanAdapter,
+  nsfwapi: nsfwapiAdapter,
 };
 
 export function getLiveAdapter(id: string): LiveAdapter | null {

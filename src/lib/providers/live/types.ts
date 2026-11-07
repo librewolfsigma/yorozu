@@ -75,8 +75,9 @@ export interface LiveAdapter {
   popular?(opts?: { page?: number; kind?: string }): Promise<LiveSearchItem[]>;
   /** Full details for one external item. */
   details?(externalId: string, opts?: SearchOpts): Promise<LiveSearchItem | null>;
-  /** Materializable content units (chapters/pages/episodes/images). */
-  units?(externalId: string): Promise<LiveUnits | null>;
+  /** Materializable content units (chapters/pages/episodes/images).
+   *  Receives the user's provider config (self-hosted sources need baseUrl). */
+  units?(externalId: string, opts?: SearchOpts): Promise<LiveUnits | null>;
   /**
    * Lazy chapter resolution: given the stored source URL (a gallery page or a
    * chapter page), return the real image URLs. Cached into ChapterPage rows.

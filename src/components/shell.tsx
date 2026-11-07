@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Search, Bell, MoonStar, Home, Compass, Library, Layers, History,
+  Search, Bell, MoonStar, Home, Library, Layers, History,
   Puzzle, User, Settings, ShieldCheck,
   ChevronDown, Sparkles, Image as ImageIcon, Images, Video,
 } from "lucide-react";
@@ -129,7 +129,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <span className="font-display text-2xl leading-none text-white">Yozora</span>
           </a>
 
-          {/* desktop nav — every category reachable in one click */}
+          {/* desktop nav — provider-first: Sources is the Mihon-style primary
+              browse surface; category feeds stay one click away */}
           <nav className="ml-2 hidden items-center gap-0.5 lg:flex" aria-label="Primary">
             <a
               href="#/"
@@ -141,6 +142,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
               )}
             >
               Home
+            </a>
+
+            <a
+              href="#/sources"
+              className={cn(
+                "flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold transition-colors",
+                isActive(route.path, "/sources") || isActive(route.path, "/source/")
+                  ? "hub-soft hub-text"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+              )}
+            >
+              <Puzzle className="h-3.5 w-3.5" /> Sources
             </a>
 
             {/* Video ▾ — AV + its distinct subcategories */}
@@ -234,6 +247,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <CategoryLink catKey="DATABASE" />
               <CategoryLink catKey="MISC" />
               <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <a href="#/sources" className="flex cursor-pointer items-center gap-2.5"><Puzzle className="h-4 w-4" /> <span className="text-[13px] font-semibold">Sources</span></a>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <a href="#/collections" className="flex cursor-pointer items-center gap-2.5"><Layers className="h-4 w-4" /> <span className="text-[13px] font-semibold">Collections</span></a>
               </DropdownMenuItem>
@@ -385,18 +401,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
       >
         {[
           { path: "/", label: "Home", icon: Home },
-          { path: "/browse", label: "Browse", icon: Compass },
+          { path: "/sources", label: "Sources", icon: Puzzle, mobileOnly: true },
           { path: "/library", label: "Library", icon: Library },
-          { path: "/search", label: "Search", icon: Search, mobileOnly: true },
+          { path: "/search", label: "Search", icon: Search, dialog: true },
           { path: "/profile", label: "Profile", icon: User, mobileOnly: true },
         ].map((item) => {
-          const active = item.mobileOnly ? route.path === item.path : isActive(route.path, item.path);
+          const active = item.dialog ? false : item.mobileOnly ? route.path === item.path : isActive(route.path, item.path);
           return (
             <a
               key={item.label}
-              href={item.mobileOnly && item.path === "/search" ? undefined : `#${item.path}`}
+              href={item.dialog ? undefined : `#${item.path}`}
               onClick={
-                item.mobileOnly && item.path === "/search"
+                item.dialog
                   ? (e) => {
                       e.preventDefault();
                       setSearchOpen(true);

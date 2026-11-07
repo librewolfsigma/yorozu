@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     // the cached token may be the very one that just expired, so a plain
     // refetch could hand back the same dead URL.
     const freshUnits = sp.get("fresh") === "1";
-    const { work, units, popular, provider: prov } = await getWork(provider, externalId, { freshUnits });
+    const { work, units, popular, detailError, provider: prov } = await getWork(provider, externalId, { freshUnits });
 
     const user = await getCurrentUser();
     const ref = workRef(provider, externalId);
@@ -108,6 +108,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       work,
       units: { episodes, chapters, images },
+      detailError: detailError ?? null,
       provider: prov,
       popular,
       reviews,

@@ -20,6 +20,12 @@ const ALLOWED_HOSTS = new Set([
   "rule34video.com", "javdb.com", "c0.jdbstatic.com", "c1.jdbstatic.com",
   "www.xvideos.com", "www.eporner.com", "hanime1.me", "vdownload.hembed.com",
   "pmvhaven.com", "r18.dev",
+  // hmv — HMVmania (site's own WP uploads) + Iwara (files CDN + stream hosts)
+  "hmvmania.com", "iwara.tv", "www.iwara.tv",
+  // anime streaming — HentaiOcean direct mirrors (w{n}.hentaiocean.com)
+  "hentaiocean.com",
+  // manga — nhentai galleries (image/thumb servers are rotating i{n}/t{n} → suffix below)
+  "nhentai.net",
   // stash-box family (scene covers/CDN assets; scenes themselves never proxied)
   "stashdb.org", "javstash.org", "fansdb.cc", "pmvstash.org",
   // anime
@@ -40,6 +46,9 @@ const ALLOWED_HOST_SUFFIXES = [
   ".dmm.co.jp", // r18.dev covers (pics.dmm.co.jp) + official trailers (cc3001.dmm.co.jp)
   ".hembed.com", // hanime1.me stream host (vdownload.hembed.com)
   ".jdbstatic.com", // javdb cover shards
+  ".nhentai.net", // nhentai image/thumb servers (i1-i4.nhentai.net, t1-t4.nhentai.net)
+  ".iwara.tv", // Iwara file/image hosts (files.iwara.tv, filesq.iwara.tv, asta.iwara.tv)
+  ".hentaiocean.com", // HentaiOcean direct stream mirrors (w1/w2.hentaiocean.com)
 ];
 
 // H@H CDN client hosts (e-hentai distributed image servers) — matched by
@@ -76,6 +85,9 @@ const REFERER_FOR: Record<string, string> = {
   "vdownload.hembed.com": "https://hanime1.me/",
   "pmvhaven.com": "https://pmvhaven.com/",
   "r18.dev": "https://r18.dev/",
+  "hmvmania.com": "https://hmvmania.com/",
+  "hentaiocean.com": "https://hentaiocean.com/",
+  "nhentai.net": "https://nhentai.net/",
 };
 
 export const BROWSER_UA =

@@ -75,13 +75,13 @@ function CategoryIndex() {
 
 function categoryBlurb(key: string): string {
   const blurbs: Record<string, string> = {
-    ANIME: "Streams & metadata · AniList, Sukebei",
-    MANGA: "Serialized manga · MangaDex, MangaUpdates",
+    ANIME: "Streams · HentaiOcean, NSFW-API · AniList metadata",
+    MANGA: "Serialized manga · nhentai v2, MangaDex, MangaUpdates",
     DOUJIN: "Doujinshi galleries · E-Hentai, WholesomeList, Sukebei",
     MANHWA: "Webtoons · Manga18fx",
     ILLUSTRATION: "Single booru images · e621, yande.re, Hypnohub",
     GALLERY: "Curated image collections · e621 Pools",
-    AV: "AV / JAV · PMV · HMV · Hentai scenes",
+    AV: "AV / JAV · PMV (PMVHaven) · HMV (HMVmania + Iwara) · Hentai scenes",
     GAME: "Visual novels & doujin games · VNDB, DLsite",
     SCRIPT: "Userscripts & tools",
     DATABASE: "Metadata databases directory",

@@ -55,8 +55,8 @@ export const VIDEO_KINDS: { key: string; label: string; blurb: string }[] = [
   { key: "JAV", label: "AV · JAV", blurb: "Japanese adult video — the AV category itself (JavDB, r18.dev, XVideos, JAVStash)" },
   { key: "WESTERN", label: "Western scenes", blurb: "Studio scene metadata (StashDB — optional free API key)" },
   { key: "CREATOR", label: "Creator", blurb: "Independent & clip-store creators (FansDB)" },
-  { key: "PMV", label: "PMV", blurb: "Porn music video edits (PMVHaven, EPorner, PMV Stash)" },
-  { key: "HMV", label: "HMV", blurb: "Hentai music video edits (PMVHaven)" },
+  { key: "PMV", label: "PMV", blurb: "Porn music video edits — PMVHaven exclusively (user directive)" },
+  { key: "HMV", label: "HMV", blurb: "Hentai music video edits — HMVmania + Iwara only (user directive)" },
   { key: "HENTAI", label: "Hentai & animated", blurb: "Adult animation / CG clips (Rule34Video, Hanime1)" },
 ];
 
