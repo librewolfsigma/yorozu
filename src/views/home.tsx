@@ -2,19 +2,26 @@
 
 import { useQuery } from "@tanstack/react-query";
 import {
-  Play, Info, ChevronRight, Sparkles, Clock, Users, Puzzle, AlertTriangle,
+  Play, ChevronRight, Sparkles, Clock, Users, Puzzle, AlertTriangle,
   Compass, BookOpen, Image as ImageIcon, Tv,
 } from "lucide-react";
 import { api } from "@/lib/client-api";
 import { navigate } from "@/hooks/use-hash-route";
 import { useAuth } from "@/components/providers";
-import { MediaRail, MediaGrid, fromDTO, GridSkeleton, CoverImg } from "@/components/media/card";
-import { categoryMeta, CATEGORIES, videoKindLabel } from "@/lib/category-meta";
+import { MediaRail, MediaGrid, fromDTO, GridSkeleton } from "@/components/media/card";
+import { categoryMeta, videoKindLabel } from "@/lib/category-meta";
 import type { WorkDTO } from "@/lib/serialize";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// Client-safe proxy builder (mirrors lib/imgproxy.proxyUrl without its
+// server-only import chain — node:child_process cannot enter the bundle).
+function proxyImg(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  return `/api/img?u=${encodeURIComponent(raw)}`;
+}
 
 interface FeedPage {
   category: string;
@@ -75,7 +82,6 @@ export default function HomeView() {
     staleTime: 120_000,
   });
   const { user } = useAuth();
-  const [heroIdx, setHeroIdx] = useState(0);
 
   if (isLoading || !data) {
     return (
@@ -86,82 +92,46 @@ export default function HomeView() {
     );
   }
 
-  const hero = data.hero[heroIdx % Math.max(1, data.hero.length)];
+  const hero = data.hero[0];
   const heroMeta = hero ? categoryMeta(hero.category) : null;
 
   return (
-    <div className="space-y-9 pb-6">
-      {/* ── Hero ── */}
+    <div className="space-y-8 pb-6">
+      {/* ── Spotlight — compact Aniyomi-style wide cards (no giant hero) ── */}
       {hero && heroMeta && (
-        <section className="hero-aurora relative overflow-hidden rounded-2xl border border-border card-ring-lg">
-          <img
-            src={hero.bannerUrl || hero.coverUrl || HERO_IMAGES[heroIdx % HERO_IMAGES.length]}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover opacity-40"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0B1622] via-[#0B1622]/85 to-[#0B1622]/30" />
-          <div className="relative grid gap-6 p-6 sm:p-9 md:grid-cols-[1.15fr_0.85fr] md:items-center">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider" style={{ background: `${heroMeta.hub}22`, color: heroMeta.hub }}>
-                  {heroMeta.label} Spotlight
-                </span>
-                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-foreground/80">18+</span>
-              </div>
-              <h1 className="mt-3 font-display text-4xl leading-tight text-white sm:text-5xl lg:text-[56px]">
-                {hero.title}
-              </h1>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
-                {hero.year != null && <span>{hero.year}</span>}
-                {hero.format && <span>· {hero.format}</span>}
-                {hero.status && <span>· {hero.status === "ONGOING" ? "Ongoing" : "Completed"}</span>}
-                {hero.rating != null && hero.rating > 0 && (
-                  <span className="font-semibold" style={{ color: heroMeta.hub }}>★ {hero.rating.toFixed(1)}</span>
-                )}
-                <span>· via {hero.providerName}</span>
-              </div>
-              <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-foreground/80 line-clamp-3">
-                {hero.description}
-              </p>
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-                <Button
-                  size="lg"
-                  className="h-12 rounded-2xl cta-gradient border-0 px-7 text-[15px] font-bold"
-                  onClick={() => navigate(`/media?p=${encodeURIComponent(hero.provider)}&id=${encodeURIComponent(hero.externalId)}`)}
-                >
-                  <Play className="mr-1.5 h-4.5 w-4.5 fill-current" /> {heroMeta.action}
-                </Button>
-                <Button
-                  size="lg"
-                  variant="ghost"
-                  className="h-12 rounded-2xl border border-white/15 bg-white/10 px-5 text-[15px] font-semibold text-white hover:bg-white/15"
-                  onClick={() => navigate(`/media?p=${encodeURIComponent(hero.provider)}&id=${encodeURIComponent(hero.externalId)}`)}
-                >
-                  <Info className="mr-1.5 h-4.5 w-4.5" /> Details
-                </Button>
-              </div>
-            </div>
-
-            {/* poster fan */}
-            <div className="relative hidden h-[260px] md:block" aria-hidden>
-              {data.hero.slice(0, 5).map((m, i) => (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-[15px] font-bold text-white">
+              <Sparkles className="h-4 w-4 text-[#3DB4F2]" /> Spotlight
+            </h2>
+            <span className="rounded-full bg-[#EF5B6B]/15 px-2 py-0.5 text-[10px] font-bold text-[#FF8B96]">18+</span>
+          </div>
+          <div className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1 snap-x">
+            {data.hero.slice(0, 10).map((m) => {
+              const mm = categoryMeta(m.category);
+              return (
                 <button
                   key={m.ref}
-                  onClick={() => setHeroIdx(i)}
-                  className={cn(
-                    "absolute bottom-0 w-[150px] overflow-hidden rounded-xl card-ring transition-all duration-500 hover:z-20 hover:-translate-y-3",
-                    i === heroIdx % data.hero.length ? "z-10 scale-105" : "opacity-80"
-                  )}
-                  style={{
-                    left: `${8 + i * 17}%`,
-                    transform: `rotate(${(i - 2) * 4}deg)`,
-                    zIndex: i === heroIdx % data.hero.length ? 10 : 5 - Math.abs(i - 2),
-                  }}
+                  onClick={() => navigate(`/media?p=${encodeURIComponent(m.provider)}&id=${encodeURIComponent(m.externalId)}`)}
+                  className="group relative h-[148px] w-[280px] shrink-0 snap-start overflow-hidden rounded-xl border border-border text-left sm:w-[320px]"
+                  aria-label={`Open ${m.title}`}
                 >
-                  <CoverImg src={m.coverUrl} alt="" className="aspect-[2/3] w-full object-cover" />
+                  <img
+                    src={proxyImg(m.bannerUrl || m.coverUrl) || HERO_IMAGES[0]}
+                    alt=""
+                    loading="lazy"
+                    className="absolute inset-0 h-full w-full object-cover opacity-60 transition-opacity group-hover:opacity-75"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0B1622] via-[#0B1622]/45 to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 p-3">
+                    <span className="rounded-full px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider" style={{ background: `${mm.hub}26`, color: mm.hub }}>
+                      {mm.label} · via {m.providerName}
+                    </span>
+                    <p className="mt-1.5 line-clamp-2 text-[13.5px] font-bold leading-snug text-white">{m.title}</p>
+                  </div>
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </section>
       )}
@@ -226,31 +196,6 @@ export default function HomeView() {
       <Section title="Trending this week" icon={<Sparkles className="h-4.5 w-4.5" />}>
         <CategoryTabs categories={data.categories} />
       </Section>
-
-      {/* ── Category shortcuts ── */}
-      <section>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {CATEGORIES.map((c) => (
-            <button
-              key={c.key}
-              onClick={() => navigate(`/browse/${c.key}`)}
-              className="group flex items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg press-scale"
-              style={{ ["--hub" as string]: c.hub }}
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg hub-soft" style={{ color: c.hub }}>
-                <c.icon className="h-5 w-5" />
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-[13.5px] font-bold">{c.label}</span>
-                <span className="block text-[11px] text-muted-foreground">
-                  {data.categories[c.key]?.length ?? 0} live
-                </span>
-              </span>
-              <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-            </button>
-          ))}
-        </div>
-      </section>
 
       {/* ── Popular grid ── */}
       <Section title="Popular right now" icon={<Users className="h-4.5 w-4.5" />} href="/browse/ANIME">

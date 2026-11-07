@@ -2,7 +2,7 @@
 // VERIFIED from sandbox: RSS search returns real entries with magnets.
 // Torrents/magnets are EXTERNAL download links — Yozora hosts nothing.
 
-import { match1, matchAll, liveText, stripTags } from "./http";
+import { match1, liveText, stripTags } from "./http";
 import type { LiveAdapter, LiveSearchItem } from "./types";
 
 interface RssItem {

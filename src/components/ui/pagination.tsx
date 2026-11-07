@@ -46,8 +46,13 @@ function PaginationLink({
   className,
   isActive,
   size = "icon",
+  children,
   ...props
 }: PaginationLinkProps) {
+  // jsx-a11y/anchor-has-content: content is always provided by callers via
+  // `children` (required at every usage — PaginationContent composes
+  // PaginationPrevious/Next/Ellipsis, each rendering their own label).
+  if (!children) return null
   return (
     <a
       aria-current={isActive ? "page" : undefined}

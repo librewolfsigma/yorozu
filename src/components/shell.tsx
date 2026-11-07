@@ -1,11 +1,20 @@
 "use client";
 
+// App shell — rebuilt in the Aniyomi/Mihon-client idiom (user directive:
+// "change it completely"): a NAVIGATION-DRAWER app, not a marketing website.
+//  - Desktop: fixed left sidebar (logo, primary nav, content sections,
+//    utility links at the bottom) + slim top bar with search/notifications.
+//  - Mobile: compact top app bar (screen title + actions) + bottom tabs
+//    (Home · Library · History · Browse · More) + More action sheet.
+//  - No marketing footer — a single slim status line closes the page.
+
 import React, { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search, Bell, MoonStar, Home, Library, Layers, History, Compass, MoreHorizontal,
   Puzzle, User, Settings, ShieldCheck, FileCode2, Database,
-  ChevronDown, Sparkles, Image as ImageIcon, Images, Video,
+  ChevronDown, Sparkles, Image as ImageIcon, Images, Video, Tv, BookOpen, Heart,
+  ScrollText, Gamepad2, X,
 } from "lucide-react";
 import { useAuth } from "@/components/providers";
 import { navigate, useHashRoute } from "@/hooks/use-hash-route";
@@ -27,55 +36,80 @@ interface NotificationRow {
   link: string | null; read: boolean; createdAt: string;
 }
 
-// TAXONOMY in the nav: every category is reachable in one click (dropdown or
-// direct) — Manga, Doujin and Manhwa are distinct entries; single booru images
-// and image collections are distinct entries; AV subkinds live under Video.
-const NAV_CATEGORIES = ["ANIME", "MANGA", "DOUJIN", "MANHWA", "ILLUSTRATION", "GALLERY", "AV", "GAME", "SCRIPT", "DATABASE", "MISC"];
+// Screen titles for the mobile app bar (Aniyomi shows the screen name).
+const SCREEN_TITLES: [RegExp, string][] = [
+  [/^\/$/, "Home"],
+  [/^\/library/, "Library"],
+  [/^\/history/, "History"],
+  [/^\/browse\/?$/, "Browse"],
+  [/^\/browse\/AV/, "Video"],
+  [/^\/browse\/ANIME/, "Anime"],
+  [/^\/browse\/MANGA/, "Manga"],
+  [/^\/browse\/DOUJIN/, "Doujin"],
+  [/^\/browse\/MANHWA/, "Manhwa"],
+  [/^\/browse\/ILLUSTRATION/, "Images (Booru)"],
+  [/^\/browse\/GALLERY/, "Image Collections"],
+  [/^\/browse\/GAME/, "Games"],
+  [/^\/browse\/SCRIPT/, "Scripts"],
+  [/^\/browse\/DATABASE/, "Databases"],
+  [/^\/browse\/MISC/, "Miscellaneous"],
+  [/^\/browse/, "Browse"],
+  [/^\/sources/, "Sources"],
+  [/^\/source\//, "Source"],
+  [/^\/extensions/, "Extensions"],
+  [/^\/scripts/, "Scripts"],
+  [/^\/databases/, "Databases"],
+  [/^\/collections/, "Collections"],
+  [/^\/search/, "Search"],
+  [/^\/profile/, "Profile"],
+  [/^\/settings/, "Settings"],
+  [/^\/policy/, "Content policy"],
+];
+
+function screenTitle(path: string): string {
+  for (const [re, label] of SCREEN_TITLES) if (re.test(path)) return label;
+  return "Yozora";
+}
 
 function isActive(currentPath: string, itemPath: string): boolean {
   if (itemPath === "/") return currentPath === "/";
   return currentPath === itemPath || currentPath.startsWith(itemPath + "/");
 }
 
-function CategoryDropdown({ label, active, children }: {
-  label: string; active: boolean; children: React.ReactNode;
+// ─── Sidebar nav item ────────────────────────────────────────────────────────
+
+function SideItem({ href, icon: Icon, label, active, badge }: {
+  href: string; icon: React.ComponentType<{ className?: string }>; label: string; active: boolean; badge?: string;
 }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className={cn(
-            "flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold transition-colors",
-            active
-              ? "hub-soft hub-text"
-              : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-          )}
-        >
-          {label} <ChevronDown className="h-3 w-3 opacity-70" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-60 rounded-xl border-border">
-        {children}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <a
+      href={`#${href}`}
+      className={cn(
+        "group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] font-semibold transition-colors",
+        active
+          ? "bg-white/[0.07] text-[#3DB4F2]"
+          : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+      )}
+      aria-current={active ? "page" : undefined}
+    >
+      <Icon className={cn("h-[18px] w-[18px]", active ? "text-[#3DB4F2]" : "text-muted-foreground group-hover:text-foreground")} />
+      {label}
+      {badge && (
+        <span className="ml-auto rounded-full bg-white/5 px-1.5 py-0.5 text-[9.5px] font-bold text-muted-foreground">{badge}</span>
+      )}
+    </a>
   );
 }
 
-function CategoryLink({ catKey, onClick }: { catKey: string; onClick?: () => void }) {
-  const m = categoryMeta(catKey);
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <DropdownMenuItem asChild>
-      <a
-        href={`#/browse/${catKey}`}
-        onClick={onClick}
-        className="flex cursor-pointer items-center gap-2.5"
-      >
-        <m.icon className="h-4 w-4" style={{ color: m.hub }} />
-        <span className="text-[13px] font-semibold">{m.label}</span>
-      </a>
-    </DropdownMenuItem>
+    <p className="mb-1 mt-4 px-3 text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground/70">
+      {children}
+    </p>
   );
 }
+
+// ─── Shell ───────────────────────────────────────────────────────────────────
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const { route } = useHashRoute();
@@ -83,14 +117,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [headerSolid, setHeaderSolid] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const onScroll = () => setHeaderSolid(window.scrollY > 12);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -112,169 +139,76 @@ export function Shell({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const title = screenTitle(route.path);
+
   return (
-    <div className="flex min-h-screen flex-col">
-      {/* ── Header ── */}
-      <header
-        className={cn(
-          "fixed inset-x-0 top-0 z-50 h-[60px] border-b transition-colors duration-300",
-          headerSolid ? "glass-header border-border" : "border-transparent bg-transparent"
-        )}
+    <div className="min-h-screen">
+      {/* ── Desktop sidebar (Mihon/Aniyomi navigation drawer) ── */}
+      <aside
+        className="fixed inset-y-0 left-0 z-40 hidden w-[232px] flex-col border-r border-border bg-[#0D1626]/95 backdrop-blur lg:flex"
+        aria-label="Sidebar"
       >
-        <div className="mx-auto flex h-full max-w-[1140px] items-center gap-2 px-4 lg:px-5">
-          {/* logo */}
-          <a href="#/" className="flex items-center gap-2 press-scale" aria-label="Yozora home">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg cta-gradient">
-              <MoonStar className="h-4.5 w-4.5 text-white" />
+        <a href="#/" className="flex items-center gap-2 px-4 pb-3 pt-5 press-scale" aria-label="Yozora home">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg cta-gradient">
+            <MoonStar className="h-4.5 w-4.5 text-white" />
+          </span>
+          <span className="font-display text-2xl leading-none text-white">Yozora</span>
+          <span className="ml-auto rounded-full bg-[#EF5B6B]/15 px-1.5 py-0.5 text-[9px] font-bold text-[#FF8B96]">18+</span>
+        </a>
+
+        <nav className="flex-1 overflow-y-auto px-2 pb-4 no-scrollbar" aria-label="Primary">
+          <SideItem href="/" icon={Home} label="Home" active={isActive(route.path, "/")} />
+          <SideItem href="/library" icon={Library} label="Library" active={isActive(route.path, "/library")} />
+          <SideItem href="/history" icon={History} label="History" active={isActive(route.path, "/history")} />
+          <SideItem href="/browse" icon={Compass} label="Browse" active={route.path === "/browse"} />
+          <SideItem href="/sources" icon={Puzzle} label="Sources" active={isActive(route.path, "/sources") || isActive(route.path, "/source/")} />
+
+          <SectionLabel>Content</SectionLabel>
+          <SideItem href="/browse/ANIME" icon={Tv} label="Anime" active={isActive(route.path, "/browse/ANIME")} />
+          <SideItem href="/browse/MANGA" icon={BookOpen} label="Manga" active={isActive(route.path, "/browse/MANGA")} />
+          <SideItem href="/browse/DOUJIN" icon={Heart} label="Doujin" active={isActive(route.path, "/browse/DOUJIN")} />
+          <SideItem href="/browse/MANHWA" icon={ScrollText} label="Manhwa" active={isActive(route.path, "/browse/MANHWA")} />
+
+          {/* Video ▾ — AV + its distinct subcategories */}
+          <VideoDropdown active={isActive(route.path, "/browse/AV")} />
+
+          {/* Images ▾ — single booru images vs collections DISTINCT */}
+          <ImagesDropdown active={isActive(route.path, "/browse/ILLUSTRATION") || isActive(route.path, "/browse/GALLERY")} />
+
+          <SideItem href="/browse/GAME" icon={Gamepad2} label="Games" active={isActive(route.path, "/browse/GAME")} />
+
+          <SectionLabel>Platform</SectionLabel>
+          <SideItem href="/extensions" icon={Puzzle} label="Extensions" active={isActive(route.path, "/extensions")} />
+          <SideItem href="/scripts" icon={FileCode2} label="Scripts" active={isActive(route.path, "/scripts")} />
+          <SideItem href="/databases" icon={Database} label="Databases" active={isActive(route.path, "/databases")} />
+          <SideItem href="/collections" icon={Layers} label="Collections" active={isActive(route.path, "/collections")} />
+        </nav>
+
+        <div className="border-t border-border px-2 py-2">
+          <SideItem href="/settings" icon={Settings} label="Settings" active={isActive(route.path, "/settings")} />
+          <SideItem href="/policy" icon={ShieldCheck} label="Content policy" active={isActive(route.path, "/policy")} />
+          {user && <SideItem href="/profile" icon={User} label="Profile" active={isActive(route.path, "/profile")} />}
+        </div>
+      </aside>
+
+      {/* ── Top bar ── */}
+      <header className="fixed inset-x-0 top-0 z-30 border-b border-border bg-[#0B1622]/90 backdrop-blur-lg lg:left-[232px]">
+        {/* mobile: screen title · desktop: search + actions */}
+        <div className="flex h-[52px] items-center gap-2 px-4 lg:h-[56px] lg:px-6">
+          <a href="#/" className="flex items-center gap-2 lg:hidden" aria-label="Yozora home">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg cta-gradient">
+              <MoonStar className="h-4 w-4 text-white" />
             </span>
-            <span className="font-display text-2xl leading-none text-white">Yozora</span>
+            <span className="font-display text-xl leading-none text-white">{title}</span>
           </a>
 
-          {/* desktop nav — provider-first: Sources is the Mihon-style primary
-              browse surface; category feeds stay one click away */}
-          <nav className="ml-2 hidden items-center gap-0.5 lg:flex" aria-label="Primary">
-            <a
-              href="#/"
-              className={cn(
-                "rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold transition-colors",
-                isActive(route.path, "/")
-                  ? "hub-soft hub-text"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-              )}
-            >
-              Home
-            </a>
-
-            <a
-              href="#/sources"
-              className={cn(
-                "flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold transition-colors",
-                isActive(route.path, "/sources") || isActive(route.path, "/source/")
-                  ? "hub-soft hub-text"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-              )}
-            >
-              <Puzzle className="h-3.5 w-3.5" /> Sources
-            </a>
-
-            {/* Video ▾ — AV + its distinct subcategories */}
-            <CategoryDropdown label="Video" active={isActive(route.path, "/browse/AV")}>
-              <DropdownMenuItem asChild>
-                <a href="#/browse/AV" className="flex cursor-pointer items-center gap-2.5">
-                  <Video className="h-4 w-4 text-[#FF6F91]" />
-                  <span className="text-[13px] font-semibold">All video</span>
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {VIDEO_KINDS.filter((k) => k.key).map((k) => (
-                <DropdownMenuItem key={k.key} asChild>
-                  <a href={`#/browse/AV?kind=${encodeURIComponent(k.key)}`} className="flex cursor-pointer items-center gap-2.5" title={k.blurb}>
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#FF6F91]" />
-                    <span className="text-[13px] font-semibold">{k.label}</span>
-                  </a>
-                </DropdownMenuItem>
-              ))}
-            </CategoryDropdown>
-
-            {/* direct reading categories — Manga / Doujin / Manhwa DISTINCT */}
-            {[
-              { key: "ANIME", label: "Anime" },
-              { key: "MANGA", label: "Manga" },
-              { key: "DOUJIN", label: "Doujin" },
-              { key: "MANHWA", label: "Manhwa" },
-            ].map((c) => (
-              <a
-                key={c.key}
-                href={`#/browse/${c.key}`}
-                className={cn(
-                  "rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold transition-colors",
-                  isActive(route.path, `/browse/${c.key}`)
-                    ? "hub-soft hub-text"
-                    : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-                )}
-              >
-                {c.label}
-              </a>
-            ))}
-
-            {/* Images ▾ — single booru images vs collections DISTINCT */}
-            <CategoryDropdown
-              label="Images"
-              active={isActive(route.path, "/browse/ILLUSTRATION") || isActive(route.path, "/browse/GALLERY")}
-            >
-              <DropdownMenuItem asChild>
-                <a href="#/browse/ILLUSTRATION" className="flex cursor-pointer items-center gap-2.5">
-                  <ImageIcon className="h-4 w-4 text-[#AE8BFF]" />
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-semibold">Images (Booru)</span>
-                    <span className="block text-[10.5px] text-muted-foreground">Single posts · tag search · lightbox</span>
-                  </span>
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href="#/browse/GALLERY" className="flex cursor-pointer items-center gap-2.5">
-                  <Images className="h-4 w-4 text-[#8AE0B0]" />
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-semibold">Image Collections</span>
-                    <span className="block text-[10.5px] text-muted-foreground">Curated multi-image sets</span>
-                  </span>
-                </a>
-              </DropdownMenuItem>
-            </CategoryDropdown>
-
-            <a
-              href="#/browse/GAME"
-              className={cn(
-                "rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold transition-colors",
-                isActive(route.path, "/browse/GAME")
-                  ? "hub-soft hub-text"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-              )}
-            >
-              Games
-            </a>
-
-            {/* More ▾ — everything else, one click away */}
-            <CategoryDropdown
-              label="More"
-              active={
-                isActive(route.path, "/scripts") || isActive(route.path, "/databases") ||
-                isActive(route.path, "/collections") || isActive(route.path, "/history") ||
-                isActive(route.path, "/extensions") || isActive(route.path, "/browse/SCRIPT") ||
-                isActive(route.path, "/browse/DATABASE") || isActive(route.path, "/browse/MISC")
-              }
-            >
-              <CategoryLink catKey="SCRIPT" />
-              <CategoryLink catKey="DATABASE" />
-              <CategoryLink catKey="MISC" />
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <a href="#/sources" className="flex cursor-pointer items-center gap-2.5"><Puzzle className="h-4 w-4" /> <span className="text-[13px] font-semibold">Sources</span></a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href="#/collections" className="flex cursor-pointer items-center gap-2.5"><Layers className="h-4 w-4" /> <span className="text-[13px] font-semibold">Collections</span></a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href="#/history" className="flex cursor-pointer items-center gap-2.5"><History className="h-4 w-4" /> <span className="text-[13px] font-semibold">History</span></a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href="#/extensions" className="flex cursor-pointer items-center gap-2.5"><Puzzle className="h-4 w-4" /> <span className="text-[13px] font-semibold">Extensions</span></a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href="#/settings" className="flex cursor-pointer items-center gap-2.5"><Settings className="h-4 w-4" /> <span className="text-[13px] font-semibold">Settings</span></a>
-              </DropdownMenuItem>
-            </CategoryDropdown>
-          </nav>
-
-          <div className="flex-1" />
-
-          {/* search */}
+          {/* desktop inline search */}
           <button
             onClick={() => {
               setSearchOpen(true);
               setTimeout(() => inputRef.current?.focus(), 50);
             }}
-            className="ml-1 flex h-9 items-center gap-2 rounded-lg border border-border bg-white/5 px-3 text-sm text-muted-foreground hover:bg-white/10 transition-colors"
+            className="ml-auto flex h-9 items-center gap-2 rounded-lg border border-border bg-white/5 px-3 text-sm text-muted-foreground transition-colors hover:bg-white/10 max-lg:ml-auto max-lg:h-9 max-lg:w-9 max-lg:justify-center max-lg:px-0 lg:ml-4"
             aria-label="Search"
           >
             <Search className="h-4 w-4" />
@@ -282,10 +216,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <kbd className="hidden md:inline-flex rounded border border-border bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">Ctrl K</kbd>
           </button>
 
-          {/* notifications */}
           {user && <NotificationBell />}
-
-          {/* user — always present: Yozora has no login, just a local profile */}
           <UserMenu />
         </div>
       </header>
@@ -313,7 +244,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div className="p-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Jump to category</p>
             <div className="flex flex-wrap gap-2">
-              {NAV_CATEGORIES.map((c) => (
+              {["ANIME", "MANGA", "DOUJIN", "MANHWA", "ILLUSTRATION", "GALLERY", "AV", "GAME", "SCRIPT", "DATABASE", "MISC"].map((c) => (
                 <button
                   key={c}
                   onClick={() => {
@@ -334,70 +265,27 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </Dialog>
 
       {/* ── Main ── */}
-      <main className="flex-1 pb-20 lg:pb-0">
-        <div className="mx-auto w-full max-w-[1140px] px-4 pt-[76px] lg:px-5">{children}</div>
-      </main>
-
-      {/* ── Footer (sticky via flex-col + mt-auto handled by min-h-screen flex) ── */}
-      <footer className="mt-auto border-t border-border bg-[#151F2E] pb-20 lg:pb-0">
-        <div className="mx-auto max-w-[1140px] px-4 py-10 lg:px-5">
-          <div className="grid gap-8 md:grid-cols-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg cta-gradient">
-                  <MoonStar className="h-4 w-4 text-white" />
-                </span>
-                <span className="font-display text-xl text-white">Yozora</span>
-              </div>
-              <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
-                Universal 18+ media platform. Mihon-inspired extensions, AniList-style tracking,
-                Hikari-inspired design. Catalog data is fetched live from integrated third-party providers.
-              </p>
-              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#EF5B6B]/15 px-2.5 py-1 text-[11px] font-bold text-[#FF8B96]">
-                <ShieldCheck className="h-3.5 w-3.5" /> 18+ ONLY · AGE VERIFIED
-              </p>
-            </div>
-            <div>
-              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Discover</p>
-              <ul className="space-y-2 text-[13px] text-muted-foreground">
-                {NAV_CATEGORIES.slice(0, 6).map((c) => (
-                  <li key={c}><a className="hover:text-foreground" href={`#/browse/${c}`}>{categoryMeta(c).label}</a></li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Platform</p>
-              <ul className="space-y-2 text-[13px] text-muted-foreground">
-                <li><a className="hover:text-foreground" href="#/extensions">Extensions</a></li>
-                <li><a className="hover:text-foreground" href="#/scripts">Scripts</a></li>
-                <li><a className="hover:text-foreground" href="#/databases">Databases</a></li>
-                <li><a className="hover:text-foreground" href="#/settings">Settings</a></li>
-              </ul>
-            </div>
-            <div>
-              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Safety</p>
-              <ul className="space-y-2 text-[13px] text-muted-foreground">
-                <li><a className="hover:text-foreground" href="#/policy">Content policy</a></li>
-                <li><a className="hover:text-foreground" href="#/policy">Report content</a></li>
-                <li>
-                  <a className="hover:text-foreground inline-flex items-center gap-1" href="https://wotaku.wiki/nsfw" target="_blank" rel="noreferrer">
-                    Source research (Wotaku) <Sparkles className="h-3 w-3" />
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div className="mt-8 flex flex-col items-start justify-between gap-2 border-t border-border pt-5 text-[12px] text-muted-foreground md:flex-row md:items-center">
-            <p>© {new Date().getFullYear()} Yozora. All catalog content comes from integrated external providers (see Extensions); Yozora hosts no media files.</p>
-            <p>Design inspired by myhikari.in · Architecture inspired by Mihon & AniList</p>
+      <main className="lg:pl-[232px]">
+        <div className="mx-auto w-full max-w-[1240px] px-4 pb-16 pt-[68px] lg:px-7 lg:pt-[76px]">{children}</div>
+        {/* slim status line — replaces the marketing footer */}
+        <div className="mx-auto w-full max-w-[1240px] px-4 pb-24 lg:px-7 lg:pb-6">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-4 text-[11.5px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1 font-semibold">
+              <MoonStar className="h-3 w-3" /> Yozora
+            </span>
+            <span>Universal 18+ client · content fetched live from installed providers</span>
+            <a href="#/policy" className="hover:text-foreground">Content policy</a>
+            <a href="#/extensions" className="hover:text-foreground">Extensions</a>
+            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-[#EF5B6B]/15 px-2 py-0.5 font-bold text-[#FF8B96]">
+              <ShieldCheck className="h-3 w-3" /> 18+ ONLY
+            </span>
           </div>
         </div>
-      </footer>
+      </main>
 
-      {/* ── Mobile bottom tabbar — Aniyomi structure: Library / History /
-          Browse / More, with Home for the landing ── */}
+      {/* ── Mobile bottom tabbar — Aniyomi structure ── */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 flex h-14 items-stretch justify-around border-t border-border bg-[#151F2E]/95 backdrop-blur-lg lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 flex h-14 items-stretch justify-around border-t border-border bg-[#0D1626]/95 backdrop-blur-lg lg:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         aria-label="Mobile"
       >
@@ -474,6 +362,87 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ─── Video dropdown (sidebar) ────────────────────────────────────────────────
+
+function VideoDropdown({ active }: { active: boolean }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className={cn(
+            "group flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] font-semibold transition-colors",
+            active ? "bg-white/[0.07] text-[#3DB4F2]" : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+          )}
+          aria-expanded="false"
+        >
+          <Video className="h-[18px] w-[18px]" />
+          Video
+          <ChevronDown className="ml-auto h-3.5 w-3.5 opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="right" align="start" className="w-56 rounded-xl border-border">
+        <DropdownMenuItem asChild>
+          <a href="#/browse/AV" className="flex cursor-pointer items-center gap-2.5">
+            <Video className="h-4 w-4 text-[#FF6F91]" />
+            <span className="text-[13px] font-semibold">All video</span>
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {VIDEO_KINDS.filter((k) => k.key).map((k) => (
+          <DropdownMenuItem key={k.key} asChild>
+            <a href={`#/browse/AV?kind=${encodeURIComponent(k.key)}`} className="flex cursor-pointer items-center gap-2.5" title={k.blurb}>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#FF6F91]" />
+              <span className="text-[13px] font-semibold">{k.label}</span>
+            </a>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ─── Images dropdown (sidebar) ───────────────────────────────────────────────
+
+function ImagesDropdown({ active }: { active: boolean }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className={cn(
+            "group flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] font-semibold transition-colors",
+            active ? "bg-white/[0.07] text-[#3DB4F2]" : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+          )}
+          aria-expanded="false"
+        >
+          <ImageIcon className="h-[18px] w-[18px]" />
+          Images
+          <ChevronDown className="ml-auto h-3.5 w-3.5 opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="right" align="start" className="w-60 rounded-xl border-border">
+        <DropdownMenuItem asChild>
+          <a href="#/browse/ILLUSTRATION" className="flex cursor-pointer items-center gap-2.5">
+            <ImageIcon className="h-4 w-4 text-[#AE8BFF]" />
+            <span className="min-w-0">
+              <span className="block text-[13px] font-semibold">Images (Booru)</span>
+              <span className="block text-[10.5px] text-muted-foreground">Single posts · tag search · lightbox</span>
+            </span>
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href="#/browse/GALLERY" className="flex cursor-pointer items-center gap-2.5">
+            <Images className="h-4 w-4 text-[#8AE0B0]" />
+            <span className="min-w-0">
+              <span className="block text-[13px] font-semibold">Image Collections</span>
+              <span className="block text-[10.5px] text-muted-foreground">Curated multi-image sets</span>
+            </span>
+          </a>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -555,7 +524,7 @@ function UserMenu() {
               {user.username.slice(0, 1).toUpperCase()}
             </span>
           )}
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground lg:block" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56 rounded-xl border-border">

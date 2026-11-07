@@ -5,7 +5,7 @@
 // VERIFIED from sandbox: docs/nsfw.md, docs/software.md, docs/games.md,
 // docs/tools.md exist in the repo's docs/ directory.
 
-import { matchAll, liveText } from "./http";
+import { liveText } from "./http";
 import type { LiveAdapter, LiveSearchItem } from "./types";
 
 const RAW = "https://raw.githubusercontent.com/wotakumoe/wotaku/main/docs";
@@ -73,7 +73,7 @@ export const wotakuScriptsAdapter: LiveAdapter = {
     await liveText(`${RAW}/nsfw.md`, { cacheTtlMs: 0 });
   },
 
-  async search(q, opts) {
+  async search(q, _opts) {
     const rows = await fetchDocs(["nsfw.md", "software.md", "tools.md"]);
     return toItems(rows, "SCRIPT", "Resource/Tool", "wotaku-scripts", q || "script");
   },
@@ -92,7 +92,7 @@ export const wotakuMiscAdapter: LiveAdapter = {
     await liveText(`${RAW}/misc.md`, { cacheTtlMs: 0 });
   },
 
-  async search(q, opts) {
+  async search(q, _opts) {
     const rows = await fetchDocs(["misc.md", "guides/index.md", "torrenting/index.md"]);
     return toItems(rows, "MISC", "Guide/Reference", "wotaku-misc", q);
   },
@@ -111,7 +111,7 @@ export const wotakuDatabasesAdapter: LiveAdapter = {
     await liveText(`${RAW}/nsfw.md`, { cacheTtlMs: 0 });
   },
 
-  async search(q, opts) {
+  async search(q, _opts) {
     const rows = await fetchDocs(["nsfw.md"]);
     const dbRows = rows.filter((r) => /database|db|metadata|scrape|index/i.test(r.desc + r.name));
     return toItems(dbRows.length ? dbRows : rows, "DATABASE", "Metadata Database", "wotaku-databases", q);

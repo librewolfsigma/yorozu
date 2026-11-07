@@ -32,6 +32,18 @@ function parseTagString(s: string): string[] {
 // ─── e621 (REST JSON) ───
 // https://e621.net/help:api — anonymous: 2 tags/req, requests need descriptive UA.
 
+
+// e621 "sample" of an animated post (webm/mp4) IS the video file — an <img>
+// cover must be a real image, so fall back to the always-image preview.
+function imageOrPreview(...candidates: (string | null | undefined)[]): string | null {
+  for (const c of candidates) {
+    if (!c) continue;
+    if (/\.(webm|mp4|mov|mkv)(\?|$)/i.test(c)) continue;
+    return c;
+  }
+  return null;
+}
+
 interface E621Post {
   id: number;
   created_at: string;
@@ -61,8 +73,8 @@ function e621Normalize(p: E621Post): LiveSearchItem | null {
       ? `${p.tags.artist.join(", ")} — #${p.id}`
       : `e621 post #${p.id}`,
     description: (p.description ?? "").replace(/\[\/?[a-z=/]+\]/g, "").slice(0, 800) || null,
-    coverUrl: p.sample?.url || p.preview.url,
-    bannerUrl: p.file.url,
+    coverUrl: imageOrPreview(p.sample?.url, p.preview.url),
+    bannerUrl: imageOrPreview(p.file.url, p.sample?.url, p.preview.url),
     category: "ILLUSTRATION",
     format: p.file.ext.toUpperCase(),
     year,
@@ -123,7 +135,7 @@ export const e621Adapter: LiveAdapter = {
       images: [
         {
           url: p.file.url,
-          thumbUrl: p.sample?.url || p.preview.url,
+          thumbUrl: imageOrPreview(p.sample?.url, p.preview.url),
           width: p.file.width,
           height: p.file.height,
           tags: [...(p.tags?.artist ?? []), ...(p.tags?.general ?? []).slice(0, 20)],
@@ -238,8 +250,8 @@ function dapiNormalize(p: DapiPost, host: string, base: string): LiveSearchItem 
   return {
     externalId: String(p.id),
     title: tags.length ? `${tags.slice(0, 3).join(", ")} — #${p.id}` : `${host} post #${p.id}`,
-    coverUrl: p.preview_url ?? p.sample_url ?? null,
-    bannerUrl: p.sample_url ?? p.file_url ?? null,
+    coverUrl: imageOrPreview(p.preview_url, p.sample_url),
+    bannerUrl: imageOrPreview(p.sample_url, p.preview_url, p.file_url),
     category: "ILLUSTRATION",
     format: "IMAGE",
     popularity: Number(p.score ?? 0),

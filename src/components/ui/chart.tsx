@@ -74,6 +74,25 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     ([, config]) => config.theme || config.color
   )
 
+  // SECURITY: this string is injected via <style dangerouslySetInnerHTML>.
+  // Only literal color syntaxes may pass — hex, hsl()/hsla(), rgb()/rgba(),
+  // oklch(), color-mix() over a palette, transparent/currentcolor, or a
+  // CSS variable reference. Anything else (e.g. `url(...)`, `}`, `;`) is
+  // dropped so a malicious chart config cannot inject CSS/HTML.
+  const safeColor = (raw: string): string | null => {
+    const v = raw.trim()
+    if (!v) return null
+    if (v === "transparent" || v === "currentcolor" || v === "inherit") return v
+    if (/^var\(--[a-zA-Z0-9-]+\)$/.test(v)) return v
+    if (/^#[0-9a-fA-F]{3,8}$/.test(v)) return v
+    if (/^(hsla?|rgba?|oklch|lab|lch|color)\(/i.test(v)) {
+      // reject any argument that could escape the declaration
+      if (/[{};<>]|url\(/i.test(v)) return null
+      return v
+    }
+    return null
+  }
+
   if (!colorConfig.length) {
     return null
   }
@@ -87,9 +106,11 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
 ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
-    const color =
+    const color = safeColor(
       itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
-      itemConfig.color
+        itemConfig.color ||
+        ""
+    )
     return color ? `  --color-${key}: ${color};` : null
   })
   .join("\n")}

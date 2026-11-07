@@ -150,7 +150,7 @@ async function boundedText(res: Response, maxBytes = MAX_RESPONSE_BYTES): Promis
 }
 
 export async function liveJson<T>(url: string, opts: LiveFetchOpts = {}): Promise<T> {
-  const res = await liveFetch(url, { ...opts, headers: { Accept: "application/json", ...(opts.headers ?? {}) } });
+  const res = await liveFetch(url, { ...opts, headers: { Accept: "application/json", ...opts.headers } });
   const text = await boundedText(res, 4 * 1024 * 1024); // JSON APIs stay well under this
   return JSON.parse(text) as T;
 }
@@ -170,7 +170,7 @@ export async function livePostJson<T>(url: string, payload: unknown, opts: LiveF
   const res = await liveFetch(url, {
     ...opts,
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(opts.headers ?? {}) },
+    headers: { "Content-Type": "application/json", ...opts.headers },
     body: JSON.stringify(payload),
   });
   return (await res.json()) as T;
