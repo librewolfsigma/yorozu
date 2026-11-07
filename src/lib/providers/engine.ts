@@ -21,7 +21,7 @@ const CAN_WATCH = new Set([
   "rule34video", "xvideos", "eporner", "hanime", "pmvhaven", "r18dev",
 ]);
 const CAN_READ = new Set(["mangadex", "ehentai", "manga18fx"]);
-const CAN_VIEW = new Set(["e621", "yandere", "hypnohub", "gelbooru"]);
+const CAN_VIEW = new Set(["e621", "e621-pools", "yandere", "hypnohub", "gelbooru"]);
 
 /**
  * Extension providers derive availability from their declared capabilities
@@ -339,7 +339,7 @@ export async function searchProviders(opts: { q: string; category?: string; prov
   };
 }
 
-// ─── discover rails — live popular listings, TTL-cached, never persisted ───
+// ── discover rails — live popular listings, TTL-cached, never persisted ──
 
 export async function discoverCategory(category: string, kind?: string) {
   const { installed } = await listProviders();
@@ -382,9 +382,93 @@ export async function discoverCategory(category: string, kind?: string) {
   return { category, kind: kind ?? null, rails };
 }
 
+/**
+ * Paged feed for one category — the engine behind infinite scroll.
+ *
+ * Every usable provider in scope contributes its page-N listing (search when
+ * `q` is set, popular otherwise); results are interleaved round-robin and
+ * deduped on external refs per request. Nothing is persisted — each page is
+ * a live upstream fetch behind the bounded TTL cache, so NEW upstream items
+ * surface on the next page pull after cache expiry.
+ */
+export async function feedCategory(opts: {
+  category: string;
+  kind?: string;
+  q?: string;
+  page?: number;
+}) {
+  const page = Math.max(1, opts.page ?? 1);
+  const q = (opts.q ?? "").trim();
+  const { installed } = await listProviders();
+  let scope = installed.filter((p) => p.category === opts.category);
+  if (opts.kind) {
+    if (opts.kind === "HMV") {
+      scope = scope.filter((p) => PROVIDER_VIDEO_KIND[p.id] === "PMV");
+    } else {
+      scope = scope.filter((p) => PROVIDER_VIDEO_KIND[p.id] === opts.kind);
+    }
+  }
+
+  const registry = await getRegistryDefs();
+  const perProvider: { id: string; name: string; error: string | null; count: number; items: WorkDTO[] }[] = [];
+  await Promise.all(
+    scope.map(async (p) => {
+      const def = registry.find((d) => d.id === p.id);
+      const adapter = getLiveAdapter(p.id);
+      try {
+        assertUsable(p);
+        if (!adapter) throw new ApiError(501, "no live adapter installed");
+        const cap = capabilitiesFor(def ?? { id: p.id, name: p.name, category: p.category, description: "", version: "", author: "", homepage: "", capabilities: [], configSchema: [] });
+        const fetcher = async () => {
+          if (q) {
+            if (!adapter.search) throw new ApiError(501, "source has no text search upstream");
+            return adapter.search(q, { page, ...providerOpts(p) });
+          }
+          if (!adapter.popular) throw new ApiError(501, "source exposes no popular listing (search-only — use search)");
+          return adapter.popular({ page, kind: opts.kind });
+        };
+        const raw = await cached("feed", `${p.id}:${q}:${page}:${opts.kind ?? ""}`, TTL.RAILS, fetcher);
+        const items = dedupeByRef(
+          raw
+            .filter((i) => i.externalId && i.title)
+            .slice(0, 40)
+            .map((i) => toWorkDTO(i, { id: p.id, name: p.name, canWatch: cap.watch, canRead: cap.read, canView: cap.view })),
+        );
+        perProvider.push({ id: p.id, name: p.name, error: null, count: items.length, items });
+      } catch (e) {
+        perProvider.push({ id: p.id, name: p.name, error: e instanceof Error ? e.message : String(e), count: 0, items: [] });
+      }
+    }),
+  );
+
+  // round-robin interleave — every source gets fair representation on every page
+  const queues = perProvider.filter((s) => !s.error).map((s) => [...s.items].sort((a, b) => b.popularity - a.popularity));
+  const merged: WorkDTO[] = [];
+  const seen = new Set<string>();
+  for (let depth = 0; queues.some((qq) => qq.length > 0) && merged.length < 120; depth++) {
+    for (const qq of queues) {
+      const item = qq.shift();
+      if (!item || seen.has(item.ref)) continue;
+      seen.add(item.ref);
+      merged.push(item);
+    }
+  }
+
+  const liveCount = perProvider.filter((s) => !s.error && s.count > 0).length;
+  return {
+    category: opts.category,
+    kind: opts.kind ?? null,
+    q,
+    page,
+    items: merged,
+    hasMore: liveCount > 0 && merged.length >= Math.min(10, page * 4),
+    providers: perProvider.map(({ id, name, error, count }) => ({ id, name, error, count })),
+  };
+}
+
 // ─── work details + units — resolved live on demand ───
 
-export async function getWork(providerId: string, externalId: string) {
+export async function getWork(providerId: string, externalId: string, opts?: { freshUnits?: boolean }) {
   const { def, dto, adapter } = await getProviderDTO(providerId);
 
   const availability = capabilitiesFor(def);
@@ -420,7 +504,12 @@ export async function getWork(providerId: string, externalId: string) {
     // Units carry PLAYABLE URLs that are often short-lived signed tokens
     // (KVS get_file, xvideos secure links, eporner XHR). Cache them briefly —
     // a stale token is exactly what breaks playback with expired-URL 403s.
-    units = await cached("units", `${def.id}:${externalId}`, TTL.UNITS, () => adapter.units!(externalId)).catch(() => null);
+    // `freshUnits` skips the cache read entirely — the player's mid-stream
+    // recovery uses it to force a genuinely NEW resolve (the cached token
+    // may be the one that just died, e.g. after an egress IP rotation).
+    units = opts?.freshUnits
+      ? await adapter.units!(externalId).catch(() => null)
+      : await cached("units", `${def.id}:${externalId}`, TTL.UNITS, () => adapter.units!(externalId)).catch(() => null);
   }
 
   // "Popular on <provider>" rail (replaces the old local recommendations table)

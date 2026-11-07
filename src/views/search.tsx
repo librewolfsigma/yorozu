@@ -1,13 +1,13 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Search, PackageOpen, AlertTriangle } from "lucide-react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { Search, PackageOpen, AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { api } from "@/lib/client-api";
 import { MediaCard, GridSkeleton, fromDTO } from "@/components/media/card";
 import { CATEGORIES } from "@/lib/category-meta";
 import type { WorkDTO } from "@/lib/serialize";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface SearchResponse {
   q: string;
@@ -19,17 +19,55 @@ interface SearchResponse {
 }
 
 // Live fan-out search: every installed provider is queried per request and the
-// flat result list is deduped on external refs. Nothing hits a local catalog.
+// flat result list is deduped on external refs. PAGINATED: "Load more" pulls
+// the next upstream page from every provider (infinite scroll). Nothing hits
+// a local catalog.
 export default function SearchView({ query }: { query: URLSearchParams }) {
   const q = query.get("q") ?? "";
   const [category, setCategory] = useState(query.get("category") ?? "");
 
-  const { data, isLoading } = useQuery({
+  const search = useInfiniteQuery({
     queryKey: ["search", q, category],
-    queryFn: () =>
-      api<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}${category ? `&category=${encodeURIComponent(category)}` : ""}`),
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      api<SearchResponse>(
+        `/api/search?q=${encodeURIComponent(q)}${category ? `&category=${encodeURIComponent(category)}` : ""}&page=${pageParam}`,
+      ),
+    getNextPageParam: (last) => (last.total > 0 ? last.page + 1 : undefined),
     enabled: q.length > 0,
   });
+
+  const results = useMemo(() => {
+    const seen = new Set<string>();
+    const flat: WorkDTO[] = [];
+    for (const page of search.data?.pages ?? []) {
+      for (const item of page.providerResults) {
+        if (seen.has(item.ref)) continue;
+        seen.add(item.ref);
+        flat.push(item);
+      }
+    }
+    return flat;
+  }, [search.data]);
+
+  const latest = search.data?.pages.at(-1);
+  const providerErrors = search.data?.pages.flatMap((p) => p.providerErrors) ?? [];
+  const providersOk = latest ? Object.keys(latest.groups).length : 0;
+
+  // infinite scroll sentinel
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && search.hasNextPage && !search.isFetchingNextPage) void search.fetchNextPage();
+      },
+      { rootMargin: "800px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [search.hasNextPage, search.isFetchingNextPage, search.fetchNextPage, results.length]);
 
   if (!q) {
     return (
@@ -43,7 +81,7 @@ export default function SearchView({ query }: { query: URLSearchParams }) {
     );
   }
 
-  const providersOk = data ? Object.keys(data.groups).length : 0;
+  const providersOkCount = search.data ? providersOk : 0;
 
   return (
     <div className="pb-6">
@@ -51,10 +89,10 @@ export default function SearchView({ query }: { query: URLSearchParams }) {
         Results for <span className="text-[#3DB4F2]">“{q}”</span>
       </h1>
       <p className="mt-1 text-[13px] text-muted-foreground">
-        {isLoading
+        {search.isPending
           ? "Searching live across installed providers…"
-          : data
-            ? `${data.total} results from ${providersOk} provider${providersOk === 1 ? "" : "s"} · nothing is stored locally`
+          : search.data
+            ? `${results.length} results from ${providersOkCount} provider${providersOkCount === 1 ? "" : "s"} · nothing is stored locally`
             : ""}
       </p>
 
@@ -66,13 +104,13 @@ export default function SearchView({ query }: { query: URLSearchParams }) {
         ))}
       </div>
 
-      {isLoading ? (
+      {search.isPending ? (
         <div className="mt-6"><GridSkeleton count={12} /></div>
       ) : (
         <>
-          {data && data.providerResults.length > 0 ? (
+          {results.length > 0 ? (
             <div className="mt-6 grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-              {data.providerResults.map((w) => (
+              {results.map((w) => (
                 <MediaCard
                   key={w.ref}
                   media={fromDTO(w)}
@@ -95,17 +133,48 @@ export default function SearchView({ query }: { query: URLSearchParams }) {
             </div>
           )}
 
+          {/* infinite scroll sentinel + states */}
+          {results.length > 0 && (
+            <>
+              <div ref={sentinelRef} aria-hidden className="h-1" />
+              <div className="mt-6 flex items-center justify-center gap-2 pb-2 text-sm text-muted-foreground" aria-live="polite">
+                {search.isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading more results…
+                  </>
+                ) : search.hasNextPage ? (
+                  <button onClick={() => void search.fetchNextPage()} className="rounded-lg px-4 py-2 text-[13px] font-bold text-muted-foreground hover:text-foreground">
+                    Load more
+                  </button>
+                ) : (
+                  <p className="text-[13px]">End of upstream results for this query.</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {search.isError && (
+            <div className="mt-8 flex flex-col items-center rounded-xl border border-dashed border-[#EF5B6B]/40 py-10 text-center">
+              <AlertTriangle className="h-8 w-8 text-[#EF5B6B]" />
+              <p className="mt-2 font-semibold">Search failed</p>
+              <p className="mt-1 max-w-md text-sm text-muted-foreground">{(search.error as Error)?.message}</p>
+              <button onClick={() => void search.refetch()} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#3DB4F2]/15 px-4 py-2 text-sm font-bold text-[#3DB4F2]">
+                <RefreshCw className="h-3.5 w-3.5" /> Retry
+              </button>
+            </div>
+          )}
+
           {/* honest provider error panel */}
-          {data && data.providerErrors.length > 0 && (
+          {providerErrors.length > 0 && (
             <section className="mt-8" aria-label="Provider errors">
               <h2 className="mb-2 flex items-center gap-1.5 text-[13px] font-bold text-[#FF8B96]">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                {data.providerErrors.length} provider{data.providerErrors.length === 1 ? "" : "s"} failed during this search
+                {providerErrors.length} provider{providerErrors.length === 1 ? "" : "s"} failed during this search
               </h2>
               <div className="space-y-1.5">
-                {data.providerErrors.map((e) => (
+                {providerErrors.map((e, i) => (
                   <p
-                    key={e.provider}
+                    key={`${e.provider}:${i}`}
                     className="flex items-start gap-1.5 rounded-lg border border-[#EF5B6B]/25 bg-[#EF5B6B]/10 p-2.5 text-xs text-[#FF8B96]"
                   >
                     <span className="font-semibold">{e.provider}:</span>

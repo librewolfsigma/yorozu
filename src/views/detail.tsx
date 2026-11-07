@@ -125,8 +125,9 @@ export default function DetailView({ provider, id }: { provider?: string | null;
   const resumeLabel =
     work.category === "ANIME" ? "Watch now"
     : work.category === "AV" ? "Play now"
-    : work.category === "MANGA" || work.category === "MANHWA" ? "Read now"
-    : work.category === "ILLUSTRATION" ? "Open gallery"
+    : work.category === "MANGA" || work.category === "DOUJIN" || work.category === "MANHWA" ? "Read now"
+    : work.category === "GALLERY" ? "Open collection"
+    : work.category === "ILLUSTRATION" ? "View image"
     : meta.action;
 
   return (
@@ -144,11 +145,17 @@ export default function DetailView({ provider, id }: { provider?: string | null;
 
         <div className="relative mx-auto grid max-w-[1140px] gap-6 px-4 pb-6 pt-8 sm:grid-cols-[200px_1fr] sm:px-5 lg:px-5">
           <div className="mx-auto w-40 sm:mx-0 sm:w-full">
-            <img
-              src={work.coverUrl ?? ""}
-              alt={`${work.title} cover`}
-              className="aspect-[2/3] w-full rounded-2xl card-ring-lg object-cover"
-            />
+            {work.coverUrl ? (
+              <img
+                src={work.coverUrl}
+                alt={`${work.title} cover`}
+                className="aspect-[2/3] w-full rounded-2xl card-ring-lg object-cover"
+              />
+            ) : (
+              <div className="flex aspect-[2/3] w-full items-center justify-center rounded-2xl card-ring-lg bg-muted" aria-hidden>
+                <Icon className="h-10 w-10 text-muted-foreground" />
+              </div>
+            )}
           </div>
 
           <div className="min-w-0">

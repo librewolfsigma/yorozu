@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Library as LibraryIcon, Heart, Trash2, Play } from "lucide-react";
 import { api, post } from "@/lib/client-api";
 import { useAuth } from "@/components/providers";
-import { GridSkeleton } from "@/components/media/card";
+import { GridSkeleton, CoverImg } from "@/components/media/card";
 import { LIBRARY_STATUSES, categoryMeta, timeAgo } from "@/lib/category-meta";
 import { navigate } from "@/hooks/use-hash-route";
 import { cn } from "@/lib/utils";
@@ -240,7 +240,7 @@ export default function LibraryView() {
                       aria-label={`${e.work.title} — ${LIBRARY_STATUSES.find((s) => s.key === e.status)?.label ?? e.status}`}
                     >
                       {/* snapshot cover — display cache only, the work lives upstream */}
-                      <img src={e.work.coverUrl ?? ""} alt="" className="h-28 w-[74px] shrink-0 rounded-lg object-cover" />
+                      <CoverImg src={e.work.coverUrl} alt="" className="h-28 w-[74px] shrink-0 rounded-lg object-cover" />
                       <div className="min-w-0 flex-1">
                         <p className="line-clamp-2 text-[13.5px] font-bold leading-snug">{e.work.title}</p>
                         <p className="mt-1 text-[11px] text-muted-foreground">

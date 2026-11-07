@@ -44,9 +44,9 @@ async function audit(name: string, a: LiveAdapter, searchQ: string, detailId: st
 
 // detail ids from live probes
 await audit("r18dev", r18devAdapter, "MIDE-500", "MIDE-500");
-await audit("pmvhaven", pmvhavenAdapter, "pmv", (await pmvhavenAdapter.popular({ page: 1 }))?.[0]?.externalId ?? "");
+await audit("pmvhaven", pmvhavenAdapter, "pmv", (await pmvhavenAdapter.popular!({ page: 1 }))?.[0]?.externalId ?? "");
 await audit("eporner", epornerAdapter, "pmv", (await epornerAdapter.search("pmv", { page: 2 }))?.[0]?.externalId ?? "Tot6CWRUesR");
 await audit("xvideos", xvideosAdapter, "jav", (await xvideosAdapter.search("jav"))?.[0]?.externalId ?? "");
 await audit("javdb", javdbAdapter, "SSIS-700", (await javdbAdapter.search("SSIS-700"))?.[0]?.externalId ?? "");
-await audit("hanime", hanimeAdapter, "", (await hanimeAdapter.popular())?.[0]?.externalId ?? "");
-await audit("rule34video", rule34videoAdapter, "hentai", (await rule34videoAdapter.popular())?.[0]?.externalId ?? "");
+await audit("hanime", hanimeAdapter, "", (await hanimeAdapter.popular!())?.[0]?.externalId ?? "");
+await audit("rule34video", rule34videoAdapter, "hentai", (await rule34videoAdapter.popular!())?.[0]?.externalId ?? "");

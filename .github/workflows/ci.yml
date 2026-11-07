@@ -1,0 +1,41 @@
+# CI gates for Yozora — powered by the reusable master-ci template
+# (https://github.com/WasewaseX/master-ci).
+#
+# What gates this repo:
+#   - hygiene:     actionlint + zizmor on workflows, yamllint, shellcheck,
+#                  .editorconfig compliance, jscpd duplication (advisory in quick)
+#   - secrets:     gitleaks over FULL git history — a leaked token is a hard fail
+#   - ai-integrity: structural slop detection (elided code, stubs, empty catches,
+#                  placeholder implementations) — advisory, reported to the Security tab
+#   - node-lint:   `bun run lint` (eslint) + `tsc --noEmit` — the code-quality gate
+#   - security:    semgrep (p/default in quick) — hard gate on findings
+#   - codeql:      JS/TS security analysis pushed to the Security tab
+#
+# Profile `quick` keeps OSV/Trivy/duplication advisory; semgrep stays a gate.
+# Path filters skip every stack that did not change.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  master:
+    uses: WasewaseX/master-ci/.github/workflows/master-ci.yml@v1
+    with:
+      profile: quick
+      scorecard_publish: false
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+
+  codeql:
+    uses: WasewaseX/master-ci/.github/workflows/codeql.yml@v1
+    with:
+      languages: javascript-typescript
+    permissions:
+      contents: read
+      security-events: write

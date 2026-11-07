@@ -2,8 +2,8 @@
 
 // Category metadata: labels, icons, hub accents (Hikari per-section accent system)
 import {
-  Tv, BookOpen, ScrollText, Image as ImageIcon, Video, Gamepad2, FileCode2,
-  Compass, type LucideIcon,
+  Tv, BookOpen, Heart, ScrollText, Image as ImageIcon, Images, Video, Gamepad2,
+  FileCode2, Database, Compass, type LucideIcon,
 } from "lucide-react";
 
 export interface CategoryMeta {
@@ -19,21 +19,37 @@ export interface CategoryMeta {
 export const CATEGORIES: CategoryMeta[] = [
   { key: "ANIME", label: "Anime", icon: Tv, hub: "#3DB4F2", hub2: "#1E97D8", action: "Watch now", unit: "episode" },
   { key: "MANGA", label: "Manga", icon: BookOpen, hub: "#3ED6B0", hub2: "#1A9C8E", action: "Read now", unit: "chapter" },
+  { key: "DOUJIN", label: "Doujin", icon: Heart, hub: "#FF8AC2", hub2: "#E0559B", action: "Read now", unit: "chapter" },
   { key: "MANHWA", label: "Manhwa", icon: ScrollText, hub: "#FFBE4A", hub2: "#EE8424", action: "Read now", unit: "chapter" },
-  { key: "ILLUSTRATION", label: "Illustrations", icon: ImageIcon, hub: "#AE8BFF", hub2: "#7556F0", action: "View gallery", unit: "image" },
+  { key: "ILLUSTRATION", label: "Images (Booru)", icon: ImageIcon, hub: "#AE8BFF", hub2: "#7556F0", action: "View image", unit: "image" },
+  { key: "GALLERY", label: "Image Collections", icon: Images, hub: "#8AE0B0", hub2: "#2FA86B", action: "Open collection", unit: "image" },
   { key: "AV", label: "AV", icon: Video, hub: "#FF6F91", hub2: "#E3436A", action: "Play", unit: "scene" },
   { key: "GAME", label: "Games", icon: Gamepad2, hub: "#FF8A4C", hub2: "#E5582C", action: "Install", unit: "file" },
   { key: "SCRIPT", label: "Scripts", icon: FileCode2, hub: "#3BD47A", hub2: "#1E9E57", action: "Install", unit: "script" },
+  { key: "DATABASE", label: "Databases", icon: Database, hub: "#6BC5D2", hub2: "#2E8C9A", action: "Open", unit: "resource" },
   { key: "MISC", label: "Miscellaneous", icon: Compass, hub: "#A48BFF", hub2: "#7556F0", action: "Open", unit: "resource" },
 ];
 
 export function categoryMeta(key: string): CategoryMeta {
-  return CATEGORIES.find((c) => c.key === key) ?? CATEGORIES[7];
+  return CATEGORIES.find((c) => c.key === key) ?? CATEGORIES.find((c) => c.key === "MISC")!;
+}
+
+/**
+ * Taxonomy (user-corrected): Manga, Doujin and Manhwa are THREE DISTINCT
+ * categories. Doujinshi (self-published galleries — E-Hentai, WholesomeList,
+ * Sukebei) is never merged into serialized Manga (MangaDex, MangaUpdates).
+ * Single booru images (ILLUSTRATION) are distinct from curated multi-image
+ * collections (GALLERY) and render with a completely different UI.
+ */
+export function isReaderCategory(key: string): boolean {
+  return key === "MANGA" || key === "DOUJIN" || key === "MANHWA";
 }
 
 // AV subcategories. TAXONOMY (user-corrected): AV and JAV are THE SAME
 // category — "AV" IS Japanese Adult Video. The distinct slices that remain:
 // western studio scenes, creator/indie clips, PMV/HMV edits, hentai animation.
+export const VIDEO_KINDS_DOC = "AV and JAV are THE SAME category — Japanese Adult Video. Distinct slices: WESTERN, CREATOR, PMV, HMV, HENTAI.";
+
 export const VIDEO_KINDS: { key: string; label: string; blurb: string }[] = [
   { key: "", label: "All video", blurb: "Every adult-video subcategory" },
   { key: "JAV", label: "AV · JAV", blurb: "Japanese adult video — the AV category itself (JavDB, r18.dev, XVideos, JAVStash)" },

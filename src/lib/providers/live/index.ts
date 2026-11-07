@@ -4,6 +4,7 @@
 
 import { anilistAdapter } from "./anilist";
 import { e621Adapter, gelbooruAdapter, hypnohubAdapter, yandereAdapter } from "./booru";
+import { e621PoolsAdapter } from "./pools";
 import { dlsiteAdapter, vndbAdapter } from "./games";
 import { ehentaiAdapter, manga18fxAdapter, wholesomelistAdapter } from "./manga";
 import { rule34videoAdapter } from "./av";
@@ -26,6 +27,7 @@ export const LIVE_ADAPTERS: Record<string, LiveAdapter> = {
   anilist: anilistAdapter,
   anidb: anidbAdapter,
   e621: e621Adapter,
+  "e621-pools": e621PoolsAdapter,
   yandere: yandereAdapter,
   hypnohub: hypnohubAdapter,
   gelbooru: gelbooruAdapter,

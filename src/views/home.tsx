@@ -8,12 +8,21 @@ import {
 import { api } from "@/lib/client-api";
 import { navigate } from "@/hooks/use-hash-route";
 import { useAuth } from "@/components/providers";
-import { MediaRail, MediaGrid, fromDTO, GridSkeleton } from "@/components/media/card";
+import { MediaRail, MediaGrid, fromDTO, GridSkeleton, CoverImg } from "@/components/media/card";
 import { categoryMeta, CATEGORIES } from "@/lib/category-meta";
 import type { WorkDTO } from "@/lib/serialize";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Loader2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+interface FeedPage {
+  category: string;
+  page: number;
+  items: WorkDTO[];
+  hasMore: boolean;
+  providers: { id: string; name: string; error: string | null; count: number }[];
+}
 
 interface ContinueItem {
   provider: string;
@@ -131,7 +140,7 @@ export default function HomeView() {
                     zIndex: i === heroIdx % data.hero.length ? 10 : 5 - Math.abs(i - 2),
                   }}
                 >
-                  <img src={m.coverUrl ?? ""} alt="" className="aspect-[2/3] w-full object-cover" />
+                  <CoverImg src={m.coverUrl} alt="" className="aspect-[2/3] w-full object-cover" />
                 </button>
               ))}
             </div>
@@ -150,8 +159,9 @@ export default function HomeView() {
         </Section>
       )}
 
-      {/* ── Trending per category tabs ── */}
-      <Section title="Trending this week" icon={<Sparkles className="h-4.5 w-4.5" />} href="/browse/ANIME">
+      {/* ── Trending per category tabs — infinite append, so new upstream
+          items surface here as providers add them (not a fixed 14) ── */}
+      <Section title="Trending this week" icon={<Sparkles className="h-4.5 w-4.5" />}>
         <CategoryTabs categories={data.categories} />
       </Section>
 
@@ -282,10 +292,52 @@ function Section({ title, icon, href, children }: { title: string; icon?: React.
   );
 }
 
+/**
+ * Category tabs with INFINITE APPEND: the first page comes from the home
+ * aggregate; "Load more" pulls the next page live from /api/feed so the rail
+ * grows beyond the initial 14 whenever upstream has more.
+ */
 function CategoryTabs({ categories }: { categories: Record<string, WorkDTO[]> }) {
   const keys = Object.keys(categories).filter((k) => categories[k]?.length);
   const [active, setActive] = useState(keys[0] ?? "ANIME");
   const meta = categoryMeta(active);
+  const [extra, setExtra] = useState<WorkDTO[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // switching category tabs resets the appended pages
+  useEffect(() => {
+    setExtra([]);
+    setPage(1);
+    setHasMore(false);
+    setLoadError(null);
+    setLoadingMore(false);
+  }, [active]);
+
+  const loadMore = async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    setLoadError(null);
+    try {
+      const next = await api<FeedPage>(`/api/feed?category=${encodeURIComponent(active)}&page=${page + 1}`);
+      setExtra((prev) => {
+        const base = [...(categories[active] ?? []), ...prev].map((i) => i.ref);
+        const seen = new Set(base);
+        return [...prev, ...next.items.filter((i) => !seen.has(i.ref))];
+      });
+      setPage(next.page);
+      setHasMore(next.hasMore);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Could not load more right now");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const items = [...(categories[active] ?? []), ...extra];
+
   return (
     <div>
       <div className="no-scrollbar mb-4 flex gap-1.5 overflow-x-auto">
@@ -310,7 +362,30 @@ function CategoryTabs({ categories }: { categories: Record<string, WorkDTO[]> })
       </div>
       {keys.includes(active) ? (
         <div style={{ ["--hub" as string]: meta.hub }}>
-          <MediaRail items={(categories[active] ?? []).map(fromDTO)} showRank />
+          <MediaRail items={items.map(fromDTO)} showRank />
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+            {loadError ? (
+              <p className="flex items-center gap-2 text-xs text-[#FF8B96]">
+                <AlertTriangle className="h-3.5 w-3.5" /> {loadError}
+              </p>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={loadingMore}
+              onClick={() => void loadMore()}
+              className="gap-1.5 rounded-lg border-border bg-card"
+            >
+              {loadingMore ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              {loadingMore ? "Loading…" : hasMore || page > 1 ? "Load more" : "Load more from providers"}
+            </Button>
+            <a
+              href={`#/browse/${active}`}
+              className="flex items-center gap-0.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-[#3DB4F2]"
+            >
+              Browse all {meta.label} <ChevronRight className="h-3.5 w-3.5" />
+            </a>
+          </div>
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">No live titles in this category right now.</p>

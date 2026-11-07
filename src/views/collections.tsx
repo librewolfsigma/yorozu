@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Layers, Plus, Trash2, Loader2, X } from "lucide-react";
 import { api, post, del } from "@/lib/client-api";
+import { CoverImg } from "@/components/media/card";
 import { useAuth } from "@/components/providers";
 import { RefPoster } from "@/views/library";
 import { Button } from "@/components/ui/button";
@@ -126,7 +127,7 @@ export default function CollectionsView() {
               <div className="flex h-24 gap-0.5 overflow-hidden">
                 {c.items.slice(0, 3).map((i) => (
                   // snapshot cover — display cache only
-                  <img key={i.ref} src={i.coverUrl ?? ""} alt="" className="h-full flex-1 object-cover" />
+                  <CoverImg key={i.ref} src={i.coverUrl} alt="" className="h-full min-w-0 flex-1 object-cover" />
                 ))}
                 {c.items.length === 0 && <div className="flex h-full flex-1 items-center justify-center bg-muted text-xs text-muted-foreground">Empty</div>}
               </div>

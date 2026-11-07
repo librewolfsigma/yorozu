@@ -1,8 +1,9 @@
 "use client";
 
-import { Star, Play, Plus, Check } from "lucide-react";
+import { Star, Play, Plus, Check, Image as ImageIcon } from "lucide-react";
 import { categoryMeta, videoKindLabel, fmtNumber, STATUS_LABELS } from "@/lib/category-meta";
 import { navigate } from "@/hooks/use-hash-route";
+import { cn } from "@/lib/utils";
 import type { WorkDTO } from "@/lib/serialize";
 
 /** Card-level projection of a live WorkDTO — every list/rail/grid uses this. */
@@ -45,6 +46,24 @@ export function fromDTO(m: WorkDTO): MediaCardData {
 /** Every external work is addressed by ?p=<provider>&id=<externalId>. */
 export function workHref(provider: string, externalId: string): string {
   return `/media?p=${encodeURIComponent(provider)}&id=${encodeURIComponent(externalId)}`;
+}
+
+/**
+ * Cover image that NEVER renders an empty src (a browser bug magnet: an
+ * empty string src makes the page re-download itself). Renders a muted
+ * placeholder block instead when there is no cover upstream.
+ */
+export function CoverImg({
+  src, alt, className, iconClass,
+}: { src?: string | null; alt: string; className?: string; iconClass?: string }) {
+  if (!src) {
+    return (
+      <div className={cn("flex items-center justify-center bg-muted", className)} aria-hidden>
+        <ImageIcon className={cn("h-5 w-5 text-muted-foreground", iconClass)} />
+      </div>
+    );
+  }
+  return <img src={src} alt={alt} loading="lazy" className={className} />;
 }
 
 export function MediaCard({

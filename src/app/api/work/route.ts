@@ -17,7 +17,12 @@ export async function GET(req: NextRequest) {
     const externalId = sp.get("id");
     if (!provider || !externalId) throw new ApiError(400, "p (provider) and id (externalId) are required");
 
-    const { work, units, popular, provider: prov } = await getWork(provider, externalId);
+    // fresh=1 → skip the short units cache and force a NEW upstream resolve.
+    // The player's mid-stream recovery uses this after a token dies mid-video:
+    // the cached token may be the very one that just expired, so a plain
+    // refetch could hand back the same dead URL.
+    const freshUnits = sp.get("fresh") === "1";
+    const { work, units, popular, provider: prov } = await getWork(provider, externalId, { freshUnits });
 
     const user = await getCurrentUser();
     const ref = workRef(provider, externalId);

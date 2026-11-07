@@ -30,7 +30,9 @@ export async function GET() {
   return handle(async () => {
     const user = await getCurrentUser();
 
-    const RAIL_CATEGORIES = ["ANIME", "MANGA", "MANHWA", "ILLUSTRATION", "AV", "GAME"];
+    // TAXONOMY: every category gets a live rail — Manga and Doujin are distinct,
+    // single booru images (ILLUSTRATION) are distinct from image collections.
+    const RAIL_CATEGORIES = ["ANIME", "MANGA", "DOUJIN", "MANHWA", "ILLUSTRATION", "GALLERY", "AV", "GAME"];
     const discoveries = await Promise.all(
       RAIL_CATEGORIES.map((c) => cached(`home:${c}`, "rails", TTL.RAILS, () => discoverCategory(c)).catch(() => ({ category: c, kind: null, rails: [] }))),
     );

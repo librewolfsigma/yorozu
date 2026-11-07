@@ -7,11 +7,11 @@
 // It never renders a fake player and never crashes on a dead src
 // (docs/CLIENT_ARCHITECTURE.md §5).
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize2,
-  AlertTriangle, ChevronLeft, ChevronRight, Loader2,
+  AlertTriangle, ChevronLeft, ChevronRight, Loader2, RotateCcw,
 } from "lucide-react";
 import { api, post } from "@/lib/client-api";
 import { navigate } from "@/hooks/use-hash-route";
@@ -48,7 +48,6 @@ export function reportProgress(payload: Record<string, unknown>): void {
 
 export default function WatchView({ provider, id, episodeKey }: { provider?: string | null; id?: string | null; episodeKey?: string | null }) {
   const { user } = useAuth();
-  const qc = useQueryClient();
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const [position, setPosition] = useState(0);
@@ -58,9 +57,27 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<{ destroy: () => void } | null>(null);
 
+  // ── mid-stream resilience ──────────────────────────────────────────────
+  // Tube-site stream tokens are short-lived and IP-locked; a stream that
+  // dies MID-VIDEO (stall/expired token/egress IP rotation) is recovered
+  // automatically: save the playback position, force a genuinely FRESH
+  // upstream resolve (fresh=1 skips the units cache), remount the player
+  // and resume at the saved position. Max 2 auto attempts, then the
+  // honest manual panel takes over.
+  const [freshTick, setFreshTick] = useState(0);
+  const [autoRetries, setAutoRetries] = useState(0);
+  const [reconnecting, setReconnecting] = useState(false);
+  const resumeAtRef = useRef(0);
+  const lastPosRef = useRef(0);
+  const lastProgressAtRef = useRef(Date.now());
+  const recoveringRef = useRef(false);
+
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["work", provider, id],
-    queryFn: () => api<WorkDetail>(`/api/work?p=${encodeURIComponent(provider!)}&id=${encodeURIComponent(id!)}`),
+    queryKey: ["work", provider, id, freshTick],
+    queryFn: () =>
+      api<WorkDetail>(
+        `/api/work?p=${encodeURIComponent(provider!)}&id=${encodeURIComponent(id!)}${freshTick > 0 ? "&fresh=1" : ""}`,
+      ),
     enabled: !!provider && !!id,
   });
 
@@ -78,7 +95,22 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
     setBuffering(true);
     setPosition(0);
     setDuration(0);
+    setAutoRetries(0);
+    setReconnecting(false);
+    resumeAtRef.current = 0;
+    recoveringRef.current = false;
+    lastProgressAtRef.current = Date.now();
   }, [ep?.key]);
+
+  // After a fresh resolve lands, resume playback at the saved position.
+  useEffect(() => {
+    if (reconnecting && data?.units.episodes.length) {
+      setReconnecting(false);
+      recoveringRef.current = false;
+      // resumeAtRef is consumed by onLoadedMetadata when the remounted video
+      // is ready — nothing else to do here.
+    }
+  }, [reconnecting, data]);
 
   // Tear down any hls.js instance on unmount / src change.
   useEffect(() => {
@@ -131,17 +163,60 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
     };
   }, [user, ep]);
 
+  /**
+   * Stream failure recovery — the heart of mid-video resilience.
+   * If playback had already progressed, DON'T just show an error panel:
+   * force a fresh resolve (new token, new IP binding) and resume.
+   */
+  const handleStreamFailure = useCallback(
+    (_reason: string) => {
+      if (recoveringRef.current) return;
+      const v = videoRef.current;
+      const saved = v && v.currentTime > 2 ? v.currentTime : lastPosRef.current;
+      if (autoRetries < 2) {
+        recoveringRef.current = true;
+        setAutoRetries((n) => n + 1);
+        resumeAtRef.current = saved;
+        setVideoError(false);
+        setBuffering(true);
+        setReconnecting(true);
+        lastProgressAtRef.current = Date.now();
+        toast("Stream interrupted — resolving a fresh stream…", {
+          description: saved > 2 ? `Will resume at ${fmtDuration(Math.floor(saved))}` : undefined,
+        });
+        setFreshTick((t) => t + 1);
+      } else {
+        setVideoError(true);
+        setReconnecting(false);
+      }
+    },
+    [autoRetries],
+  );
+
+  // Stall watchdog: while playing, if the position has not advanced for 20s
+  // (and we are not already recovering), treat it as a dead stream.
+  useEffect(() => {
+    const t = setInterval(() => {
+      const v = videoRef.current;
+      if (!v || v.paused || videoError || recoveringRef.current) return;
+      if (v.duration > 0 && Date.now() - lastProgressAtRef.current > 20_000) {
+        handleStreamFailure("stream stalled");
+      }
+    }, 5_000);
+    return () => clearInterval(t);
+  }, [videoError, handleStreamFailure]);
+
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v || videoError) return;
     if (v.paused) {
       // play() rejects with NotSupportedError when the src is dead/wrong —
       // surface the honest error panel instead of an uncaught exception.
-      v.play().catch(() => setVideoError(true));
+      v.play().catch(() => handleStreamFailure("player refused the stream"));
     } else {
       v.pause();
     }
-  }, [videoError]);
+  }, [videoError, handleStreamFailure]);
 
   // Attach hls.js when the stream is HLS (browsers other than Safari cannot
   // play .m3u8 natively). Direct mp4 just uses the src attribute.
@@ -166,19 +241,20 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
       hls.loadSource(url);
       hls.attachMedia(videoRef.current);
       hls.on(Hls.Events.ERROR, (_evt, data) => {
-        if (data.fatal) setVideoError(true);
+        if (data.fatal) handleStreamFailure(`hls: ${data.details ?? "fatal error"}`);
       });
     });
     return () => { cancelled = true; };
   }, [ep?.key, ep?.streamUrl]);
 
   const retryStream = useCallback(() => {
-    // Fresh resolve: drop the cached units (expired tokens are the usual
-    // culprit) and let the refetched src remount the player.
-    setVideoError(false);
-    setBuffering(true);
-    void qc.invalidateQueries({ queryKey: ["work", provider, id] });
-  }, [qc, provider, id]);
+    // Manual fresh resolve: drop everything, force a genuinely new upstream
+    // resolve (fresh=1), and remount. Same recovery path as the automatic one.
+    setAutoRetries(0);
+    recoveringRef.current = false;
+    resumeAtRef.current = videoRef.current?.currentTime ?? 0;
+    handleStreamFailure("manual retry");
+  }, [handleStreamFailure]);
 
   const enc = encodeURIComponent;
   const watchHref = (key: string) => `/watch?p=${enc(provider!)}&id=${enc(id!)}&ep=${enc(key)}`;
@@ -253,7 +329,7 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
             {hasStream && !videoError ? (
               <div className="relative w-full" style={{ maxHeight: "70vh" }}>
                 <video
-                  key={ep.key}
+                  key={`${ep.key}:${autoRetries}:${freshTick}`}
                   ref={videoRef}
                   src={ep.streamType === "hls" ? undefined : ep.streamUrl!}
                   controls
@@ -265,12 +341,25 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
                   style={{ maxHeight: "70vh" }}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
-                  onTimeUpdate={(e) => setPosition(e.currentTarget.currentTime)}
-                  onLoadedMetadata={(e) => { setDuration(e.currentTarget.duration); setBuffering(false); }}
+                  onTimeUpdate={(e) => {
+                    setPosition(e.currentTarget.currentTime);
+                    lastPosRef.current = e.currentTarget.currentTime;
+                    lastProgressAtRef.current = Date.now();
+                  }}
+                  onLoadedMetadata={(e) => {
+                    setDuration(e.currentTarget.duration);
+                    setBuffering(false);
+                    const v = e.currentTarget;
+                    if (resumeAtRef.current > 2 && Number.isFinite(v.duration)) {
+                      v.currentTime = Math.min(resumeAtRef.current, Math.max(0, v.duration - 5));
+                      toast.success(`Resumed at ${fmtDuration(Math.floor(resumeAtRef.current))}`);
+                      resumeAtRef.current = 0;
+                    }
+                  }}
                   onWaiting={() => setBuffering(true)}
                   onPlaying={() => { setBuffering(false); setVideoError(false); }}
                   onCanPlay={() => setBuffering(false)}
-                  onError={() => setVideoError(true)}
+                  onError={() => handleStreamFailure("media error")}
                   onEnded={() => syncNow(duration || ep.durationSec || 0, true)}
                 />
                 {buffering && (
@@ -278,19 +367,26 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
                     <Loader2 className="h-10 w-10 animate-spin text-white/70" />
                   </div>
                 )}
+                {reconnecting && (
+                  <div className="pointer-events-none absolute inset-x-0 bottom-14 flex justify-center">
+                    <span className="flex items-center gap-2 rounded-full bg-black/75 px-4 py-1.5 text-[12px] font-bold text-white backdrop-blur">
+                      <RotateCcw className="h-3.5 w-3.5 animate-spin" /> Recovering stream — fetching a fresh link
+                    </span>
+                  </div>
+                )}
               </div>
             ) : hasStream && videoError ? (
-              /* stream failed — expired token / bot challenge / dead CDN link */
+              /* stream failed — expired token / bot challenge / dead CDN link.
+               Auto-recovery already tried twice; this panel offers the manual path. */
               <div className="mx-auto m-6 max-w-md rounded-2xl border border-border bg-card p-6 text-center">
                 <AlertTriangle className="mx-auto h-9 w-9 text-[#EF5B6B]" />
                 <p className="mt-3 font-bold">This stream could not be played</p>
                 <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-                  The link {work.providerName} served may have expired or is currently unreachable from here.
-                  Tube-site tokens rotate quickly — a fresh resolve usually fixes it.
+                  Automatic recovery already re-resolved the stream {autoRetries} time{autoRetries === 1 ? "" : "s"}. The link {work.providerName} served may keep expiring — a fresh resolve usually fixes it, or the video may be temporarily unavailable upstream.
                 </p>
                 <div className="mt-4 flex justify-center gap-2">
                   <Button size="sm" className="rounded-lg text-[#04121E]" style={{ background: hub }} onClick={retryStream}>
-                    Try a fresh resolve
+                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Try a fresh resolve
                   </Button>
                   {work.externalLinks.length > 0 && (
                     <a

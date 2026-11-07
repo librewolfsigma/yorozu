@@ -250,7 +250,9 @@ export function curlText(
   return new Promise((resolve, reject) => {
     execFile(
       "curl",
-      ["-sS", "--fail", "-m", String(Math.ceil(timeoutMs / 1000)), "-A", ua, "-H", "Accept: application/json", url],
+      // --globoff: URLs with [] (e.g. e621 search[order]=…) must not be
+      // interpreted as curl glob ranges.
+      ["-sS", "--fail", "--globoff", "-m", String(Math.ceil(timeoutMs / 1000)), "-A", ua, "-H", "Accept: application/json", url],
       { maxBuffer: 12 * 1024 * 1024, timeout: timeoutMs + 2000 },
       (err, stdout, stderr) => {
         if (err) {

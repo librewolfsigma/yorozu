@@ -194,7 +194,7 @@ export function refreshMediaAllowlist(): void {
 }
 
 export function isExtensionMediaHost(hostname: string): boolean {
-  if (extMediaHosts.has(hostname) || extMediaSuffixes.some((s) => hostname.endsWith(s))) return true;
+  if (extMediaHosts.has(hostname) || [...extMediaSuffixes].some((s) => hostname.endsWith(s))) return true;
   // Cold start: consult cached manifests directly if the hot set is empty.
   if (extMediaHosts.size === 0 && extMediaSuffixes.size === 0) {
     for (const def of listExtensionDefs()) {

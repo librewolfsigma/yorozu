@@ -44,11 +44,14 @@ export function avatarUrl(seed: string, label: string): string {
 export const CATEGORY_ACCENTS: Record<string, [string, string]> = {
   ANIME: ["#3DB4F2", "#1E97D8"],
   MANGA: ["#3ED6B0", "#1A9C8E"],
+  DOUJIN: ["#FF8AC2", "#E0559B"],
   MANHWA: ["#FFBE4A", "#EE8424"],
   ILLUSTRATION: ["#AE8BFF", "#7556F0"],
+  GALLERY: ["#8AE0B0", "#2FA86B"],
   AV: ["#FF6F91", "#E3436A"],
   GAME: ["#FF8A4C", "#E5582C"],
   SCRIPT: ["#3BD47A", "#1E9E57"],
+  DATABASE: ["#6BC5D2", "#2E8C9A"],
   MISC: ["#A48BFF", "#7556F0"],
 };
 

@@ -14,7 +14,7 @@
 // Category routing: originalLanguage ko → MANHWA, zh → MANHWA (manhua),
 // everything else → MANGA.
 
-import { LiveFetchError, boundedJson } from "./http";
+import { LiveFetchError, boundedJson, curlJson, PLATFORM_UA } from "./http";
 import type { LiveAdapter, LiveSearchItem, LiveUnits } from "./types";
 
 const API = "https://api.mangadex.org";
@@ -70,8 +70,19 @@ async function mdGet<T>(path: string): Promise<T> {
     if (json.result !== "ok") throw new LiveFetchError(502, "MangaDex returned non-ok result");
     return json.data;
   } catch (e) {
-    if (e instanceof LiveFetchError) throw e;
-    throw new LiveFetchError(502, `MangaDex request failed: ${e instanceof Error ? e.message : String(e)}`);
+    if (e instanceof LiveFetchError && e.status !== 502) throw e;
+    // Node-fetch TLS/socket failures against MangaDex's CDN are transient from
+    // some networks — fall back to the system curl transport (same API, same
+    // anonymous read) before giving up.
+    try {
+      return await curlJson<{ result: string; data: T }>(`${API}${path}`, { timeoutMs: 15_000 }).then((json) => {
+        if (json.result !== "ok") throw new LiveFetchError(502, "MangaDex returned non-ok result");
+        return json.data;
+      });
+    } catch (e2) {
+      if (e instanceof LiveFetchError && e.status !== 502) throw e;
+      throw new LiveFetchError(502, `MangaDex request failed: ${e2 instanceof Error ? e2.message : String(e2)}`);
+    }
   }
 }
 
