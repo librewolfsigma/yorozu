@@ -20,6 +20,7 @@ import { pmvhavenAdapter } from "./pmvhaven";
 import { r18devAdapter } from "./r18dev";
 import { javdbAdapter } from "./javdb";
 import type { LiveAdapter } from "./types";
+import { getExtensionAdapter } from "../ext/repo";
 
 export const LIVE_ADAPTERS: Record<string, LiveAdapter> = {
   anilist: anilistAdapter,
@@ -54,7 +55,18 @@ export const LIVE_ADAPTERS: Record<string, LiveAdapter> = {
 };
 
 export function getLiveAdapter(id: string): LiveAdapter | null {
-  return LIVE_ADAPTERS[id] ?? null;
+  return LIVE_ADAPTERS[id] ?? extensionAdapterFor(id);
+}
+
+/**
+ * Adapters for providers adopted from synced extension repositories.
+ * Built on demand from the cached upstream manifest — no code ships for
+ * these providers; their declarative recipes are interpreted by
+ * src/lib/providers/ext/engine. (No import cycle: ext/repo only pulls
+ * live/http and live/types.)
+ */
+export function extensionAdapterFor(id: string): LiveAdapter | null {
+  return getExtensionAdapter(id);
 }
 
 export type { LiveAdapter, LiveSearchItem, LiveUnits } from "./types";

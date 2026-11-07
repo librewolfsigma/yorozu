@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { ApiError } from "@/lib/api-utils";
 import { PROVIDER_REGISTRY, type ProviderDef } from "./registry";
 import { getLiveAdapter } from "./live";
+import { ensureExtensionManifests, listExtensionDefs } from "./ext/repo";
 import type { LiveAdapter, LiveUnits } from "./live/types";
 import { toWorkDTO, dedupeByRef, type WorkDTO } from "@/lib/serialize";
 import { cached, TTL } from "@/lib/cache";
@@ -21,6 +22,23 @@ const CAN_WATCH = new Set([
 ]);
 const CAN_READ = new Set(["mangadex", "ehentai", "manga18fx"]);
 const CAN_VIEW = new Set(["e621", "yandere", "hypnohub", "gelbooru"]);
+
+/**
+ * Extension providers derive availability from their declared capabilities
+ * — read needs chapters/pages/read, view needs gallery, watch needs
+ * scenes/streams. Bundled providers keep their audited static sets.
+ */
+function capabilitiesFor(def: ProviderDef): { watch: boolean; read: boolean; view: boolean } {
+  if (CAN_WATCH.has(def.id) || CAN_READ.has(def.id) || CAN_VIEW.has(def.id)) {
+    return { watch: CAN_WATCH.has(def.id), read: CAN_READ.has(def.id), view: CAN_VIEW.has(def.id) };
+  }
+  const c = new Set(def.capabilities);
+  return {
+    watch: c.has("scenes") || c.has("streams"),
+    read: c.has("chapters") || c.has("pages") || c.has("read"),
+    view: c.has("gallery") || c.has("view"),
+  };
+}
 
 /**
  * Fixed AV subcategory per provider. AV and JAV are THE SAME category
@@ -97,20 +115,16 @@ function defToDTO(def: ProviderDef, row: Parameters<typeof overlayToStatus>[0]):
     installed: s.installed,
     integration: getLiveAdapter(def.id)?.integration ?? null,
     configRequired: missing.length > 0,
-    availability: {
-      watch: CAN_WATCH.has(def.id),
-      read: CAN_READ.has(def.id),
-      view: CAN_VIEW.has(def.id),
-    },
+    availability: capabilitiesFor(def),
   };
 }
 
 // ─── listing (registry + overlay; no counts — there is no catalog) ───
 
 export async function listProviders() {
-  const rows = await db.provider.findMany();
+  const [rows, registry] = await Promise.all([db.provider.findMany(), getRegistryDefs()]);
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const all = PROVIDER_REGISTRY.map((def) => defToDTO(def, byId.get(def.id) ?? null));
+  const all = registry.map((def) => defToDTO(def, byId.get(def.id) ?? null));
   return {
     installed: all.filter((p) => p.installed),
     repository: all.filter((p) => !p.installed),
@@ -118,10 +132,37 @@ export async function listProviders() {
 }
 
 export async function getProviderDTO(id: string): Promise<{ def: ProviderDef; dto: ProviderDTO; adapter: LiveAdapter | null }> {
-  const def = PROVIDER_REGISTRY.find((p) => p.id === id);
+  const registry = await getRegistryDefs();
+  const def = registry.find((p) => p.id === id);
   if (!def) throw new ApiError(404, `Unknown provider: ${id}`);
   const row = await db.provider.findUnique({ where: { id } });
   return { def, dto: defToDTO(def, row), adapter: getLiveAdapter(id) };
+}
+
+/**
+ * Effective registry = bundled adapters + providers adopted from synced
+ * upstream extension repositories. Extension defs convert to the same
+ * ProviderDef shape so everything downstream (listing, search, discover,
+ * details, install overlay) treats them identically.
+ */
+function extDefToProviderDef(e: {
+  id: string; name: string; category: string; description: string;
+  version: string; author: string; homepage: string; capabilities: string[];
+  configSchema: { key: string; label: string; type: string; required?: boolean; help?: string }[];
+}): ProviderDef {
+  return {
+    id: e.id, name: e.name, category: e.category, description: e.description,
+    version: e.version, author: e.author || "extension-repo", homepage: e.homepage,
+    capabilities: e.capabilities,
+    configSchema: (e.configSchema ?? []).map((f) => ({ ...f })),
+  };
+}
+
+export async function getRegistryDefs(): Promise<ProviderDef[]> {
+  await ensureExtensionManifests(); // cold-start fetch; keeps last-good on failure
+  const ext = listExtensionDefs().map(extDefToProviderDef);
+  const bundledIds = new Set(PROVIDER_REGISTRY.map((p) => p.id));
+  return [...PROVIDER_REGISTRY, ...ext.filter((e) => !bundledIds.has(e.id))];
 }
 
 function providerOpts(dto: ProviderDTO): SearchOptsX {
@@ -241,11 +282,12 @@ export async function searchOneProvider(def: ProviderDef, dto: ProviderDTO, q: s
   if (!adapter) throw new ApiError(500, `No live adapter for ${def.id}`);
   return cached("search", `${def.id}:${q}:${page}`, TTL.SEARCH, async () => {
     const items = await adapter.search(q, { page, ...providerOpts(dto) });
+    const cap = capabilitiesFor(def);
     return dedupeByRef(
       items
         .filter((i) => i.externalId && i.title)
         .slice(0, 24)
-        .map((i) => toWorkDTO(i, { id: def.id, name: def.name, canWatch: CAN_WATCH.has(def.id), canRead: CAN_READ.has(def.id), canView: CAN_VIEW.has(def.id) })),
+        .map((i) => toWorkDTO(i, { id: def.id, name: def.name, canWatch: cap.watch, canRead: cap.read, canView: cap.view })),
     );
   });
 }
@@ -262,8 +304,9 @@ export async function searchProviders(opts: { q: string; category?: string; prov
   const settled = await Promise.all(
     scope.map(async (p) => {
       try {
+        const registry = await getRegistryDefs();
         const items = await searchOneProvider(
-          PROVIDER_REGISTRY.find((d) => d.id === p.id)!,
+          registry.find((d) => d.id === p.id) ?? { id: p.id, name: p.name, category: p.category, description: "", version: "", author: "", homepage: "", capabilities: [], configSchema: [] },
           p,
           q,
           page,
@@ -344,11 +387,7 @@ export async function discoverCategory(category: string, kind?: string) {
 export async function getWork(providerId: string, externalId: string) {
   const { def, dto, adapter } = await getProviderDTO(providerId);
 
-  const availability = {
-    watch: CAN_WATCH.has(def.id),
-    read: CAN_READ.has(def.id),
-    view: CAN_VIEW.has(def.id),
-  };
+  const availability = capabilitiesFor(def);
   const mkDTO = (i: Parameters<typeof toWorkDTO>[0]) =>
     toWorkDTO(i, { id: def.id, name: def.name, canWatch: availability.watch, canRead: availability.read, canView: availability.view });
 

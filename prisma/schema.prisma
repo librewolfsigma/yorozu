@@ -73,6 +73,22 @@ model Provider {
   installedAt   DateTime  @default(now())
 }
 
+// ─────────────────────── Extension repositories ───────────────────────
+// Upstream manifests Yozora syncs provider extensions from (data-driven
+// recipes — never code). Holds ONLY sync health + the user's install
+// decision; the last-good manifest itself lives in memory by design.
+
+model ExtensionRepo {
+  id            String    @id // e.g. "yozora-extensions"
+  url           String    // manifest URL (GitHub raw or any HTTPS JSON)
+  installed     Boolean   @default(true)
+  providerCount Int       @default(0)
+  contentHash   String? // short sha256 of the adopted provider set
+  lastError     String?
+  lastSyncedAt  DateTime?
+  createdAt     DateTime  @default(now())
+}
+
 // ─────────────────────── Library (user-owned bookmarks) ───────────────────────
 // Keyed by the EXTERNAL ref (providerId, externalId). titleSnapshot/coverSnapshot
 // are display caches for offline rendering — bookmarks, not metadata.

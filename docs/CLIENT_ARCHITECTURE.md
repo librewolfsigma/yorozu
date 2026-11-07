@@ -144,9 +144,41 @@ Streams are short-lived signed URLs on most sources, so:
 * `/api/img` retries 403/503 with a force-refreshed cookie jar, then falls
   back to a **curl streaming transport** (Range supported, challenge sniffed
   by first byte, cookie refresh through curl itself on rotation)
+* redirects are followed **manually with per-hop allowlist validation** on
+  both the fetch and curl transports — an allowlisted host can never bounce
+  the proxy at an internal address (SSRF)
+* upstream metadata responses are **hard-capped at 8 MB** (declared
+  `content-length` rejected early; body consumption bounded by a reader loop)
 * the player attaches **hls.js** for `.m3u8` streams and renders an honest
   "Try a fresh resolve / Open at source" panel on playback failure — a dead
   stream can never crash the view with NotSupportedError
+* stream-CDN hosts that reject the server runtime's TLS fingerprint at
+  network level (eporner shards, xvideos CDN, hembed, OVH storage) fall
+  through to the same curl streaming transport instead of failing the player
+
+## 6d. Extension repositories (real upstream-manifest sync)
+
+The registry is no longer code-only. Yozora syncs **maintained upstream
+extension repositories** at runtime (default:
+`librewolfsigma/yozora-extensions` → `index.json`, overridable via
+`YOZORA_EXTENSION_REPO_URL` or the Extensions UI):
+
+* a manifest is **data, never code**: declarative recipes (URL templates,
+  regex field extractors, JSON dot-paths, string replacement) interpreted by
+  `src/lib/providers/ext/engine.ts` — the only operations a recipe can
+  trigger are fetch / regex / dot-path / replace, so auto-syncing a
+  third-party repository cannot execute anything in the client
+* manifests are **validated strictly and adopted whole** — any unknown shape
+  rejects the sync
+* sync failures are **non-events**: the last-good manifest keeps serving,
+  the error is recorded on the `ExtensionRepo` row and shown in Extensions
+* extension providers flow through the SAME surfaces as bundled ones —
+  listing, install overlay, universal search, discover rails, details,
+  reading — and their declared `mediaHosts` join the proxy allowlist only
+  while installed + synced
+* the provider audit script audits extension adapters exactly like bundled
+  ones (`25 ok / 5 config-gated / 0 fail of 30` at time of writing,
+  including the HentaiFox extension)
 
 ## 7. Honesty matrix (reporting standard)
 

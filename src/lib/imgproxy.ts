@@ -1,7 +1,11 @@
 // Image/media proxy — routes third-party content through Yozora with correct
 // headers so readers/galleries/players work without violating upstream rules.
 // Strict host allowlist (SSRF protection). Only hosts belonging to the
-// integrated providers are proxied; everything else is rejected.
+// integrated providers are proxied; everything else is rejected. Hosts come
+// from two sources: the bundled provider set below, and hosts declared by
+// INSTALLED + SYNCED extension repository manifests (dynamic, never persists).
+
+import { isExtensionMediaHost, isExtensionResilientHost } from "@/lib/providers/ext/repo";
 
 const ALLOWED_HOSTS = new Set([
   // illustrations
@@ -85,7 +89,8 @@ export function isAllowedMediaUrl(raw: string): boolean {
       ALLOWED_HOSTS.has(u.hostname) ||
       ALLOWED_HOST_SUFFIXES.some((s) => u.hostname.endsWith(s)) ||
       isHathHost(u.hostname) ||
-      isMangaDexNetworkHost(u.hostname)
+      isMangaDexNetworkHost(u.hostname) ||
+      isExtensionMediaHost(u.hostname)
     );
   } catch {
     return false;
@@ -115,7 +120,8 @@ export function curlFallbackFor(raw: string): boolean {
     const host = new URL(raw).hostname;
     return (
       CURL_FALLBACK_HOSTS.has(host) ||
-      CURL_FALLBACK_SUFFIXES.some((s) => host.endsWith(s))
+      CURL_FALLBACK_SUFFIXES.some((s) => host.endsWith(s)) ||
+      isExtensionResilientHost(host)
     );
   } catch {
     return false;

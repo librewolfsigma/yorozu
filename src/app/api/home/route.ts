@@ -36,20 +36,26 @@ export async function GET() {
     );
 
     // Merge rails per category into a single deduped list (external-ref dedup,
-    // computed per request — no local index).
+    // computed per request — no local index). Rails are INTERLEAVED round-robin
+    // so every provider gets fair representation instead of one loud source
+    // (with higher popularity scores) crowding the rest out of the rail.
     const categories: Record<string, WorkDTO[]> = {};
     const heroPool: WorkDTO[] = [];
     for (const d of discoveries) {
+      const queues = d.rails
+        .filter((rail) => rail.items.length > 0)
+        .map((rail) => [...rail.items].sort((a, b) => b.popularity - a.popularity));
       const merged: WorkDTO[] = [];
       const seen = new Set<string>();
-      for (const rail of d.rails) {
-        for (const item of rail.items) {
-          if (seen.has(item.ref)) continue;
+      for (let depth = 0; queues.some((q) => q.length > 0) && merged.length < 40; depth++) {
+        for (const q of queues) {
+          const item = q.shift();
+          if (!item || seen.has(item.ref)) continue;
           seen.add(item.ref);
           merged.push(item);
         }
       }
-      categories[d.category] = merged.sort((a, b) => b.popularity - a.popularity).slice(0, 14);
+      categories[d.category] = merged.slice(0, 14);
       for (const w of merged) {
         if (w.bannerUrl || w.coverUrl) heroPool.push(w);
       }

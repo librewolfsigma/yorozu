@@ -3,17 +3,21 @@
    For each adapter: ping() → search(q) → popular() with REAL network calls.
    Config-gated providers are expected to 401 without keys — that's the
    honest gate, not a failure. */
-import { LIVE_ADAPTERS } from "@/lib/providers/live";
+import { LIVE_ADAPTERS, extensionAdapterFor } from "@/lib/providers/live";
+import { ensureExtensionManifests, listExtensionDefs } from "@/lib/providers/ext/repo";
 
 const q = process.argv[2] || "fate";
-const targets = process.argv[3] ? process.argv[3].split(",") : Object.keys(LIVE_ADAPTERS);
+await ensureExtensionManifests(); // cold-start extension adoption (non-fatal)
+const extIds = listExtensionDefs().map((d) => d.id);
+const ALL = { ...LIVE_ADAPTERS, ...Object.fromEntries(extIds.map((id) => [id, extensionAdapterFor(id)!])) };
+const targets = process.argv[3] ? process.argv[3].split(",") : Object.keys(ALL);
 console.log(`Auditing ${targets.length} adapters with q="${q}"\n`);
 
 let ok = 0, gated = 0, fail = 0;
 const gatedHint = /REQUIRES A FREE API KEY|requires a FREE account API key/i;
 
 for (const id of targets) {
-  const a = LIVE_ADAPTERS[id];
+  const a = ALL[id];
   if (!a) { console.log(`X ${id}: NOT REGISTERED`); fail++; continue; }
   try {
     await a.ping();

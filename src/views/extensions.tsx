@@ -5,7 +5,7 @@ import { useState } from "react";
 import {
   Puzzle, RefreshCw, Power, Trash2, Settings2, Download, CheckCircle2,
   XCircle, Loader2, Store, ChevronRight, AlertTriangle, Play, BookOpen,
-  Image as ImageIcon, ExternalLink, KeyRound, type LucideIcon,
+  Image as ImageIcon, ExternalLink, KeyRound, GitBranch, type LucideIcon,
 } from "lucide-react";
 import { api, post } from "@/lib/client-api";
 import { useAuth } from "@/components/providers";
@@ -37,6 +37,14 @@ interface ProviderRow {
   status: string; lastError: string | null; lastCheckedAt: string | null;
   installed: boolean; integration: string | null; configRequired: boolean;
   availability: { watch: boolean; read: boolean; view: boolean };
+}
+
+/** Matches the backend RepoInfo — upstream extension-repository sync state. */
+interface RepoRow {
+  id: string; url: string; installed: boolean; providerCount: number;
+  lastSyncedAt: string | null; lastError: string | null; contentHash: string | null;
+  live: boolean;
+  providers: { id: string; name: string; category: string; version: string; capabilities: string[] }[];
 }
 
 const CATEGORY_ORDER = CATEGORIES.map((c) => c.key);
@@ -145,10 +153,26 @@ export default function ExtensionsView() {
     queryFn: () => api<{ installed: ProviderRow[]; repository: ProviderRow[] }>("/api/providers"),
   });
 
+  const { data: repoData, isLoading: reposLoading } = useQuery({
+    queryKey: ["extension-repos"],
+    queryFn: () => api<{ repos: RepoRow[] }>("/api/extensions"),
+  });
+
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["providers"] });
+    void qc.invalidateQueries({ queryKey: ["extension-repos"] });
     void qc.invalidateQueries({ queryKey: ["home"] });
   };
+
+  const syncRepo = useMutation({
+    mutationFn: (id: string) => post<{ result: { ok: boolean; providerCount: number; error: string | null } }>("/api/extensions", { id }),
+    onSuccess: (res) => {
+      invalidate();
+      if (res.result.ok) toast.success(`Repository synced — ${res.result.providerCount} provider extension(s) adopted`);
+      else toast.warning("Sync failed — last-good extensions stay active", { description: res.result.error ?? undefined });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const install = useMutation({
     mutationFn: (id: string) => post("/api/providers", { action: "install", providerId: id }),
@@ -226,6 +250,79 @@ export default function ExtensionsView() {
         <button className="mx-1 underline" onClick={() => navigate("/browse/ANIME")}>Browse</button>
         and Search query the installed sources live, and one broken provider never breaks the rest.
       </div>
+
+      {/* upstream extension repositories */}
+      <section className="mb-6">
+        <h2 className="mb-3 flex items-center gap-2 text-[15px] font-bold">
+          <GitBranch className="h-4 w-4 text-[#3BD47A]" /> Extension repositories
+        </h2>
+        <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+          Maintained upstream manifests Yozora syncs automatically (max every 6h). Extensions are declarative
+          data — recipes, never code — so a repository can add sources without any app update. A failed sync
+          keeps the last-good providers running.
+        </p>
+        {reposLoading ? (
+          <div className="yz-skeleton h-24 rounded-xl" />
+        ) : (
+          <div className="space-y-3">
+            {(repoData?.repos ?? []).map((r) => (
+              <div key={r.id} className="rounded-xl border border-border bg-card p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#3BD47A]/15 text-[#3BD47A]">
+                    <Store className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-bold">{r.id}</p>
+                    <p className="truncate text-[11px] text-muted-foreground" title={r.url}>{r.url}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 rounded-lg border-border"
+                    onClick={() => syncRepo.mutate(r.id)}
+                    disabled={syncRepo.isPending && syncRepo.variables === r.id}
+                  >
+                    {syncRepo.isPending && syncRepo.variables === r.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <RefreshCw className="h-3.5 w-3.5" />}
+                    Sync now
+                  </Button>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                  {r.live ? (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-[#3BD47A]/15 px-2 py-0.5 font-bold text-[#3BD47A]">
+                      <CheckCircle2 className="h-3 w-3" /> live
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-[#FFBE4A]/15 px-2 py-0.5 font-bold text-[#FFBE4A]">
+                      <AlertTriangle className="h-3 w-3" /> not loaded
+                    </span>
+                  )}
+                  <span className="text-muted-foreground">
+                    {r.providers.length} provider{r.providers.length === 1 ? "" : "s"}
+                    {r.lastSyncedAt ? ` · synced ${timeAgo(r.lastSyncedAt)}` : ""}
+                  </span>
+                  {r.providers.map((p) => (
+                    <span key={p.id} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-muted-foreground">
+                      {p.name} <span className="text-[10px] opacity-70">v{p.version}</span>
+                    </span>
+                  ))}
+                </div>
+                {r.lastError && (
+                  <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-[#EF5B6B]/10 p-2 text-[11px] leading-relaxed text-[#EF5B6B]">
+                    <XCircle className="mt-0.5 h-3 w-3 shrink-0" /> {r.lastError}
+                  </p>
+                )}
+              </div>
+            ))}
+            {(repoData?.repos ?? []).length === 0 && (
+              <p className="rounded-xl border border-dashed border-border bg-card/50 p-5 text-center text-sm text-muted-foreground">
+                No extension repository configured.
+              </p>
+            )}
+          </div>
+        )}
+      </section>
 
       {isLoading ? (
         <div className="space-y-3">
