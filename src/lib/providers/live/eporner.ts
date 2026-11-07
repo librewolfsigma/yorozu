@@ -12,7 +12,7 @@
 //    → units() reports honestly instead of faking a stream.
 // No key, no account, no DRM bypass — public API + public player variables.
 
-import { match1, liveJson, liveText } from "./http";
+import { boundedJson, match1, liveJson, liveText } from "./http";
 import { liveFetchErrorStatus } from "@/lib/imgproxy";
 import type { LiveAdapter, LiveSearchItem, LiveUnits } from "./types";
 
@@ -118,13 +118,19 @@ export const epornerAdapter: LiveAdapter = {
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36", Accept: "application/json" },
     }).catch((e) => { throw Object.assign(new Error(`eporner player XHR failed: ${e.message}`), { status: liveFetchErrorStatus(e) }); });
     if (!xhr.ok) throw new Error(`eporner player XHR ${xhr.status}`);
-    const data = (await xhr.json()) as { sources?: { mp4?: Record<string, { src: string; type: string; default?: boolean }>; hls?: Record<string, { src: string }> } };
+    const data = await boundedJson<{ sources?: { mp4?: Record<string, { src: string; type: string; default?: boolean }>; hls?: Record<string, { src: string }> } }>(xhr, 2 * 1024 * 1024);
     const mp4s = Object.values(data.sources?.mp4 ?? {});
     const best = mp4s.find((s) => s.default) ?? mp4s[0] ?? null;
     const hlsEntry = Object.values(data.sources?.hls ?? {})[0] ?? null;
     const stream = best?.src ?? hlsEntry?.src ?? null;
     if (!stream) throw new Error("eporner: no playable source in player response");
     if (stream.includes("/404.mp4")) throw new Error("eporner: upstream returned its 404 placeholder — the video is too new or was removed");
+    if (stream.includes("/na.mp4")) {
+      // The XHR intermittently answers with its static n/a placeholder when
+      // it is rate-limiting or the video was just removed. Never hand that
+      // dead URL to the player — surface a retryable error instead.
+      throw new Error("eporner: upstream served its n/a placeholder — the video may be unavailable right now, try again shortly");
+    }
     return {
       episodes: [
         {

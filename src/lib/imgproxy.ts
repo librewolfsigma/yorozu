@@ -98,9 +98,25 @@ export function isAllowedMediaUrl(raw: string): boolean {
 // same real request a browser extension would make.
 const CURL_FALLBACK_HOSTS = new Set(["rule34video.com", "hanime1.me", "javdb.com"]);
 
+// Rotating stream-CDN suffixes where the server runtime's TLS fingerprint
+// can also be challenged (Node fetch fails network-level where real clients
+// succeed). The fallback only fires when the plain fetch actually fails, so
+// hosts that answer normally never pay the curl cost.
+const CURL_FALLBACK_SUFFIXES = [
+  ".eporner.com", // vid-*.cdn.eporner.com mp4 shards
+  ".xvideos-cdn.com", // mp4-/hls-gcore shards
+  ".hembed.com", // hanime stream host
+  ".cloud.ovh.net", // PMVHaven object storage
+  ".dmm.co.jp", // r18.dev official trailer CDN
+];
+
 export function curlFallbackFor(raw: string): boolean {
   try {
-    return CURL_FALLBACK_HOSTS.has(new URL(raw).hostname);
+    const host = new URL(raw).hostname;
+    return (
+      CURL_FALLBACK_HOSTS.has(host) ||
+      CURL_FALLBACK_SUFFIXES.some((s) => host.endsWith(s))
+    );
   } catch {
     return false;
   }

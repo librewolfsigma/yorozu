@@ -14,7 +14,7 @@
 // Category routing: originalLanguage ko → MANHWA, zh → MANHWA (manhua),
 // everything else → MANGA.
 
-import { LiveFetchError } from "./http";
+import { LiveFetchError, boundedJson } from "./http";
 import type { LiveAdapter, LiveSearchItem, LiveUnits } from "./types";
 
 const API = "https://api.mangadex.org";
@@ -62,11 +62,11 @@ async function mdGet<T>(path: string): Promise<T> {
       if (res.status === 429 || res.status === 503) {
         await new Promise((r) => setTimeout(r, 900));
         const retry = await fetch(`${API}${path}`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(15_000) });
-        if (retry.ok) return (await retry.json()) as T;
+        if (retry.ok) return await boundedJson<T>(retry);
       }
       throw new LiveFetchError(res.status, `MangaDex upstream ${res.status}`);
     }
-    const json = (await res.json()) as { result: string; data: T };
+    const json = (await boundedJson<{ result: string; data: T }>(res));
     if (json.result !== "ok") throw new LiveFetchError(502, "MangaDex returned non-ok result");
     return json.data;
   } catch (e) {

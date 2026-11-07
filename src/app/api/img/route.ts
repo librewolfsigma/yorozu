@@ -37,16 +37,61 @@ async function bootstrapCookies(host: string, force = false): Promise<string> {
   }
 }
 
+/**
+ * Manual redirect following with per-hop allowlist validation (SSRF guard).
+ * redirect:"follow" would let an allowlisted host bounce us to any URL —
+ * internal addresses included. Every hop is therefore re-validated against
+ * the same strict host allowlist as the initial request.
+ */
+class RedirectBlockedError extends Error {}
+
 async function tryFetch(raw: string, range: string | null, cookies: string): Promise<Response> {
-  return fetch(raw, {
-    headers: {
-      "User-Agent": BROWSER_UA,
-      ...(refererFor(raw) ? { Referer: refererFor(raw)! } : {}),
-      ...(cookies ? { Cookie: cookies } : {}),
-      ...(range ? { Range: range } : {}),
-      Accept: "*/*",
-    },
-    redirect: "follow",
+  let current = raw;
+  for (let hops = 0; hops <= 5; hops++) {
+    if (!isAllowedMediaUrl(current)) {
+      throw new RedirectBlockedError(`Redirect target not allowlisted: ${new URL(current).hostname}`);
+    }
+    const res = await fetch(current, {
+      headers: {
+        "User-Agent": BROWSER_UA,
+        ...(refererFor(current) ? { Referer: refererFor(current)! } : {}),
+        ...(cookies ? { Cookie: cookies } : {}),
+        ...(range ? { Range: range } : {}),
+        Accept: "*/*",
+      },
+      redirect: "manual",
+    });
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location");
+      try { res.body?.cancel(); } catch { /* no body */ }
+      if (!loc) throw new RedirectBlockedError("Upstream redirect without Location");
+      current = new URL(loc, current).toString();
+      continue;
+    }
+    return res;
+  }
+  throw new RedirectBlockedError("Too many redirects");
+}
+
+/**
+ * Resolve where curl would finally land (`-L`) WITHOUT streaming the body,
+ * then validate that destination against the allowlist before the streaming
+ * transport is allowed to run. Uses a 1-byte range GET so thumbnails/media
+ * are not pulled twice; hosts that ignore Range are still safely capped by
+ * `-o /dev/null`.
+ */
+function curlResolveFinal(raw: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const child = spawn("curl", ["-sS", "-L", "-o", "/dev/null", "-m", "15", "-r", "0-0", "-w", "%{url_effective}", "-A", BROWSER_UA, raw], {
+      timeout: 17_000,
+    });
+    let out = "";
+    child.stdout.on("data", (c: Buffer) => { out += c.toString(); });
+    child.on("close", () => {
+      const final = out.trim();
+      resolve(final.startsWith("https://") ? final : null);
+    });
+    child.on("error", () => resolve(null));
   });
 }
 
@@ -173,27 +218,69 @@ export async function GET(req: NextRequest) {
   const host = new URL(raw).hostname;
   const range = req.headers.get("range");
 
-  // 1) normal path — cookie-jar'd fetch
+  // 1) normal path — cookie-jar'd fetch, every redirect hop allowlisted.
+  //    A network-level failure (TLS-fingerprint rejection by the upstream,
+  //    the same class ddos-guard serves to server runtimes) is captured and
+  //    retried via the curl transport below instead of failing the request.
   let cookies = await bootstrapCookies(host);
-  let upstream = await tryFetch(raw, range, cookies);
+  let upstream: Response | null = null;
+  let upstreamStatus = 0;
+  let networkError: string | null = null;
+  try {
+    upstream = await tryFetch(raw, range, cookies);
+    upstreamStatus = upstream.status;
+  } catch (e) {
+    if (e instanceof RedirectBlockedError) {
+      return new NextResponse(`Blocked: ${e.message}`, { status: 403 });
+    }
+    networkError = e instanceof Error ? e.message : String(e);
+  }
 
   // 2) ddos-guard rotates challenges — force a fresh jar and retry once
-  if (!upstream.ok && upstream.status !== 206 && (upstream.status === 403 || upstream.status === 503)) {
+  if (upstream && upstreamStatus !== 206 && (upstreamStatus === 403 || upstreamStatus === 503)) {
+    try { upstream.body?.cancel(); } catch { /* already consumed */ }
     jar.delete(host);
     cookies = await bootstrapCookies(host, true);
-    upstream = await tryFetch(raw, range, cookies);
+    try {
+      upstream = await tryFetch(raw, range, cookies);
+      upstreamStatus = upstream.status;
+    } catch (e) {
+      if (e instanceof RedirectBlockedError) {
+        return new NextResponse(`Blocked: ${e.message}`, { status: 403 });
+      }
+      networkError = e instanceof Error ? e.message : String(e);
+      upstream = null;
+    }
   }
 
-  // 3) TLS-fingerprint challenge persists → curl streaming transport
-  if (!upstream.ok && upstream.status !== 206 && curlFallbackFor(raw)) {
-    try { upstream.body?.cancel(); } catch { /* already consumed */ }
-    return curlStream(raw, range, cookies, false);
+  const challenged =
+    !upstream || // network-level fetch failure (TLS challenge)
+    (upstreamStatus !== 206 && (upstreamStatus === 403 || upstreamStatus === 503 || upstreamStatus === 429));
+
+  // 3) challenge persists / fetch rejected outright → curl streaming transport.
+  //    First resolve where -L would finally land and validate THAT host too —
+  //    the challenge host must not be able to bounce the stream elsewhere.
+  if (challenged && curlFallbackFor(raw)) {
+    try { upstream?.body?.cancel(); } catch { /* already consumed */ }
+    const finalUrl = await curlResolveFinal(raw);
+    if (!finalUrl || !isAllowedMediaUrl(finalUrl)) {
+      return new NextResponse("Blocked: curl redirect destination not allowlisted", { status: 403 });
+    }
+    return curlStream(finalUrl, range, cookies, false);
   }
 
-  if (!upstream.ok && upstream.status !== 206) {
+  if (networkError && !upstream) {
+    return new NextResponse(`Upstream fetch failed: ${networkError}`, { status: 502 });
+  }
+
+  if (!upstream) {
+    return new NextResponse("Upstream unreachable", { status: 502 });
+  }
+
+  if (upstreamStatus !== 206 && !upstream.ok) {
     // ddos-guard may have rotated cookies — drop the jar so next try re-bootstraps
-    if (upstream.status === 403) jar.delete(host);
-    return new NextResponse(`Upstream ${upstream.status}`, { status: upstream.status });
+    if (upstreamStatus === 403) jar.delete(host);
+    return new NextResponse(`Upstream ${upstreamStatus}`, { status: upstreamStatus });
   }
 
   const headers = new Headers();

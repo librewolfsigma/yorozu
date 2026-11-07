@@ -12,7 +12,7 @@
 // (MangaDex / E-Hentai / Manga18fx). Search requires ≥1 character, so there
 // is no honest "browse/popular" listing — capabilities reflect that.
 
-import { LiveFetchError } from "./http";
+import { LiveFetchError, boundedJson } from "./http";
 import type { LiveAdapter, LiveSearchItem, LiveUnits } from "./types";
 
 const API = "https://api.mangaupdates.com/v1";
@@ -43,7 +43,7 @@ async function muFetch<T>(path: string, init?: RequestInit): Promise<T> {
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) throw new LiveFetchError(res.status, `MangaUpdates upstream ${res.status}`);
-    return (await res.json()) as T;
+    return await boundedJson<T>(res);
   } catch (e) {
     if (e instanceof LiveFetchError) throw e;
     throw new LiveFetchError(502, `MangaUpdates request failed: ${e instanceof Error ? e.message : String(e)}`);

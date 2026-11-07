@@ -96,6 +96,13 @@ export async function liveFetch(
         }
         throw new LiveFetchError(res.status, `Upstream ${res.status} for ${new URL(url).host}`);
       }
+      // Reject oversized payloads early when the upstream declares its size —
+      // bounded readers below catch the undeclared case while consuming.
+      const declared = Number(res.headers.get("content-length") ?? "0");
+      if (declared > MAX_RESPONSE_BYTES) {
+        try { res.body?.cancel(); } catch { /* no body */ }
+        throw new LiveFetchError(502, `Upstream response too large (${Math.round(declared / 1024)} KB declared) for ${new URL(url).host}`);
+      }
       if (cacheTtlMs && method === "GET") cacheSet(key, res.clone());
       return res;
     } catch (e) {
@@ -112,14 +119,51 @@ export async function liveFetch(
   throw new LiveFetchError(502, `Upstream unreachable: ${msg}`);
 }
 
+// Metadata payloads only ever need to be small; a runaway upstream (or a
+// misbehaving mirror) must not be able to exhaust memory. Cap total bytes
+// consumed per response.
+export const MAX_RESPONSE_BYTES = 8 * 1024 * 1024; // 8 MB
+
+async function boundedText(res: Response, maxBytes = MAX_RESPONSE_BYTES): Promise<string> {
+  const reader = res.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      try { await reader.cancel(); } catch { /* already closed */ }
+      throw new LiveFetchError(502, `Upstream response exceeded ${Math.round(maxBytes / 1024)} KB cap`);
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.byteLength;
+  }
+  return new TextDecoder().decode(out);
+}
+
 export async function liveJson<T>(url: string, opts: LiveFetchOpts = {}): Promise<T> {
   const res = await liveFetch(url, { ...opts, headers: { Accept: "application/json", ...(opts.headers ?? {}) } });
-  return (await res.json()) as T;
+  const text = await boundedText(res, 4 * 1024 * 1024); // JSON APIs stay well under this
+  return JSON.parse(text) as T;
+}
+
+/** Bounded JSON parse for adapters that manage their own fetch calls. */
+export async function boundedJson<T>(res: Response, maxBytes = 4 * 1024 * 1024): Promise<T> {
+  const text = await boundedText(res, maxBytes);
+  return JSON.parse(text) as T;
 }
 
 export async function liveText(url: string, opts: LiveFetchOpts = {}): Promise<string> {
   const res = await liveFetch(url, opts);
-  return await res.text();
+  return await boundedText(res);
 }
 
 export async function livePostJson<T>(url: string, payload: unknown, opts: LiveFetchOpts = {}): Promise<T> {
