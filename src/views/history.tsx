@@ -51,7 +51,7 @@ export default function HistoryView() {
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <HistoryIcon className="h-10 w-10 text-muted-foreground" />
         <p className="mt-4 font-semibold">History</p>
-        <p className="mt-1 max-w-sm text-sm text-muted-foreground">Everything you open, read and watch shows up here. Sign in to start tracking.</p>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">Everything you open, read and watch shows up here. Open something to start tracking.</p>
       </div>
     );
   }

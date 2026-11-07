@@ -22,10 +22,6 @@ interface AuthContextValue {
   ageVerified: boolean;
   loading: boolean;
   refresh: () => Promise<void>;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string, displayName?: string) => Promise<void>;
-  demoLogin: () => Promise<void>;
-  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -36,6 +32,11 @@ export function useAuth() {
   return ctx;
 }
 
+/**
+ * Yozora has NO login. The server transparently continues every visitor as
+ * this device's local profile (see src/lib/auth.ts), so `user` is always
+ * present and nothing in the app is ever gated behind an account.
+ */
 export function AppProviders({ children }: { children: React.ReactNode }) {
   const [client] = useState(
     () =>
@@ -63,29 +64,6 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const data = await post<{ user: SessionUser }>("/api/auth/login", { username, password });
-    setUser(data.user);
-    setAgeVerified(true);
-  }, []);
-
-  const register = useCallback(async (username: string, password: string, displayName?: string) => {
-    const data = await post<{ user: SessionUser }>("/api/auth/register", { username, password, displayName });
-    setUser(data.user);
-    setAgeVerified(true);
-  }, []);
-
-  const demoLogin = useCallback(async () => {
-    const data = await post<{ user: SessionUser }>("/api/auth/demo");
-    setUser(data.user);
-    setAgeVerified(true);
-  }, []);
-
-  const logout = useCallback(async () => {
-    await post("/api/auth/logout");
-    setUser(null);
-  }, []);
-
   const acceptAge = useCallback(async () => {
     localStorage.setItem("yozora_age", "1");
     try {
@@ -97,8 +75,8 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, ageVerified, loading, refresh, login, register, demoLogin, logout }),
-    [user, ageVerified, loading, refresh, login, register, demoLogin, logout]
+    () => ({ user, ageVerified, loading, refresh }),
+    [user, ageVerified, loading, refresh]
   );
 
   return (

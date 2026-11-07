@@ -7,10 +7,11 @@
 //    JavDB hosts no video; playback is an explicit external action on sites
 //    listed by the user's own sources. No DRM/paywall is touched.
 //
-// missav.ws, javlibrary, hanime API are Cloudflare-blocked from this network
-// and are intentionally NOT integrated (no fakes).
+// missav.ws and javlibrary are Cloudflare-blocked against plain server
+// fetches and are NOT integrated (no fakes). hanime1.me IS integrated via
+// the curl-resilient transport — see ./hanime.ts.
 
-import { match1, matchAll, liveText, stripTags, htmlDecode } from "./http";
+import { match1, matchAll, liveTextResilient, stripTags, htmlDecode } from "./http";
 import type { LiveAdapter, LiveSearchItem, LiveUnits } from "./types";
 
 // ─── Rule34Video (KVS) ───
@@ -21,7 +22,8 @@ function r34vNormalize(slug: string, title: string, thumb: string | null, durati
     title: stripTags(title),
     coverUrl: thumb ? htmlDecode(thumb) : null,
     category: "AV",
-    format: "Clip",
+    videoKind: "HENTAI", // adult animation/CG clips — not JAV
+    format: "Animated clip",
     externalUrl: `https://rule34video.com/video/${slug}/`,
     extra: { source: "rule34video", durationSec },
   };
@@ -55,17 +57,17 @@ function parseR34vList(html: string): LiveSearchItem[] {
 export const rule34videoAdapter: LiveAdapter = {
   id: "rule34video",
   integration:
-    "Public website integration (Rule34Video, Kernel-Video-Sharing based): HTML search/listing + video pages parsed for the publicly served MP4 playback URLs the site itself exposes in its player flashvars. No auth, DRM or paywall is bypassed.",
+    "Public website integration (Rule34Video, Kernel-Video-Sharing based): HTML search/listing + video pages parsed for the direct MP4 playback URLs the site itself exposes in its player flashvars. Fetched via the curl-resilient transport (ddos-guard rotates TLS challenges); stream tokens are short-lived so units resolve fresh. No auth, DRM or paywall is bypassed.",
 
   async ping() {
-    await liveText("https://rule34video.com/", { timeoutMs: 12_000 });
+    await liveTextResilient("https://rule34video.com/", { timeoutMs: 12_000 });
   },
 
   async search(q, opts) {
     const page = Math.max(1, opts?.page ?? 1);
     // KVS search URLs use dash-joined slugs (spaces trigger upstream 403s)
     const kw = (q.trim() || "hentai").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "hentai";
-    const html = await liveText(
+    const html = await liveTextResilient(
       `https://rule34video.com/search/${encodeURIComponent(kw)}/${page}/`,
       { cacheKey: `r34q:${kw}:${page}` },
     );
@@ -74,13 +76,13 @@ export const rule34videoAdapter: LiveAdapter = {
 
   async popular(opts) {
     const page = Math.max(1, opts?.page ?? 1);
-    const html = await liveText(`https://rule34video.com/most-popular/${page}/`, { cacheKey: `r34p:${page}` });
+    const html = await liveTextResilient(`https://rule34video.com/most-popular/${page}/`, { cacheKey: `r34p:${page}` });
     const items = parseR34vList(html);
     return items.length ? items : rule34videoAdapter.search("hentai", opts);
   },
 
   async details(externalId) {
-    const html = await liveText(`https://rule34video.com/video/${externalId}/x/`, { cacheKey: `r34v:${externalId}` });
+    const html = await liveTextResilient(`https://rule34video.com/video/${externalId}/x/`, { cacheKey: `r34v:${externalId}` });
     const title = stripTags(match1(html, /<h1[^>]*>([^<]+)<\/h1>/) ?? externalId);
     const thumb = match1(html, /property="og:image" content="([^"]+)"/) ?? match1(html, /preview_url:\s*'([^']+)'/);
     const durRaw = match1(html, /time">(\d+:\d+(?::\d+)?)</);
@@ -91,7 +93,8 @@ export const rule34videoAdapter: LiveAdapter = {
       title,
       coverUrl: thumb ? htmlDecode(thumb) : null,
       category: "AV",
-      format: "Clip",
+      videoKind: "HENTAI",
+      format: "Animated clip",
       tags,
       externalUrl: `https://rule34video.com/video/${externalId}/`,
       extra: { source: "rule34video", durationSec: dur },
@@ -99,7 +102,9 @@ export const rule34videoAdapter: LiveAdapter = {
   },
 
   async units(externalId) {
-    const html = await liveText(`https://rule34video.com/video/${externalId}/x/`, { cacheKey: `r34v:${externalId}` });
+    // Short cache ONLY — KVS get_file tokens (v-acctoken) expire quickly.
+    // A stale page here is exactly what caused expired-token 403 playback.
+    const html = await liveTextResilient(`https://rule34video.com/video/${externalId}/x/`, { cacheKey: `r34v:${externalId}`, cacheTtlMs: 45_000 });
     // KVS flashvars: video_url / video_alt_url with direct mp4 + access token
     const urls: { url: string; quality: string }[] = [];
     for (const m of html.matchAll(/video_url(?:_alt(\d?))?:\s*'([^']+)'/g)) {

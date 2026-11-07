@@ -133,11 +133,65 @@ export async function livePostJson<T>(url: string, payload: unknown, opts: LiveF
 }
 
 // ─── curl transport ───
-// Some public APIs (e.g. e621, behind Cloudflare) fingerprint the HTTP
+// Some public APIs (e.g. e621, ddos-guard tube sites) fingerprint the HTTP
 // client's TLS handshake and reject server-side runtimes (Node/Bun) while
 // accepting standard clients. For those providers we issue the same real
 // request through the system curl binary — same URL, same UA, same data.
 import { execFile } from "node:child_process";
+
+export function curlTextAdv(
+  url: string,
+  opts: { headers?: Record<string, string>; timeoutMs?: number } = {},
+): Promise<string> {
+  const { headers = {}, timeoutMs = 20_000 } = opts;
+  const args = ["-sS", "-L", "-m", String(Math.ceil(timeoutMs / 1000))];
+  for (const [k, v] of Object.entries(headers)) args.push("-H", `${k}: ${v}`);
+  args.push(url);
+  return new Promise((resolve, reject) => {
+    execFile(
+      "curl",
+      args,
+      { maxBuffer: 24 * 1024 * 1024, timeout: timeoutMs + 3000 },
+      (err, stdout, stderr) => {
+        if (err) {
+          reject(new LiveFetchError(502, `curl transport failed: ${(stderr || err.message).slice(0, 160)}`));
+          return;
+        }
+        resolve(stdout as string);
+      },
+    );
+  });
+}
+
+/**
+ * liveText with automatic curl fallback — resilient page fetch for hosts
+ * that intermittently serve 403/503 TLS-fingerprint challenges to server
+ * runtimes. The same real request is retried through the system curl with
+ * identical headers; challenge-sized bot pages are rejected, not parsed.
+ */
+export async function liveTextResilient(
+  url: string,
+  opts: LiveFetchOpts & { referer?: string } = {},
+): Promise<string> {
+  try {
+    return await liveText(url, opts);
+  } catch (e) {
+    const status = e instanceof LiveFetchError ? e.status : 502;
+    if (status !== 403 && status !== 503 && status !== 429) throw e;
+    const headers: Record<string, string> = {
+      "User-Agent": opts.ua ?? BROWSER_UA,
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+    };
+    if (opts.referer) headers.Referer = opts.referer;
+    const text = await curlTextAdv(url, { headers, timeoutMs: opts.timeoutMs ?? 20_000 });
+    // A bot challenge page is small HTML — never hand one to a parser.
+    if (text.length < 1500 && /ddos-guard|challenge|just a moment|attention required/i.test(text)) {
+      throw e;
+    }
+    return text;
+  }
+}
 
 export async function curlJson<T>(url: string, opts: { ua?: string; timeoutMs?: number } = {}): Promise<T> {
   const text = await curlText(url, opts);

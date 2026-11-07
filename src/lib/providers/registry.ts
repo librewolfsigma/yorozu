@@ -98,9 +98,51 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
   },
   {
     id: "rule34video", name: "Rule34Video", category: "AV",
-    description: "Adult animation/CG clips from Rule34Video (KVS-based tube site). Real listings and the publicly served MP4 playback URLs exposed by the site's own player. No auth, DRM or paywall is touched. NOTE: JAV databases (javdb, missav, javlibrary) are Cloudflare-protected against server integrations and are NOT integrated — Yozora links to them as directories instead of faking adapters.",
-    version: "1.0.0", author: "yozora-labs", homepage: "https://rule34video.com",
+    description: "Adult animation/CG clips from Rule34Video (KVS-based tube site). Real listings and the direct MP4 playback URLs exposed by the site's own player, fetched via a challenge-resilient transport with fresh stream tokens. Subcategory: HENTAI (animated — JAV/AV is a different slice).",
+    version: "1.1.0", author: "yozora-labs", homepage: "https://rule34video.com",
     capabilities: ["search", "details", "discover", "scenes", "streams", "health"],
+    configSchema: [],
+  },
+  {
+    id: "xvideos", name: "XVideos", category: "AV",
+    description: "General adult tube with a large JAV catalog. HTML search + the site's own html5player variables (setVideoUrlHigh/setVideoHLS) resolved fresh per request for direct in-app playback. Signed CDN URLs expire by design — Yozora re-resolves them live. Subcategory: JAV.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://www.xvideos.com",
+    capabilities: ["search", "details", "discover", "scenes", "streams", "health"],
+    configSchema: [],
+  },
+  {
+    id: "eporner", name: "EPorner", category: "AV",
+    description: "Official public JSON API (eporner.com/api/v2 — keyless) plus the site's player XHR for direct MP4 playback. Discover rail is PMV-tuned; search covers the full catalog including hentai. No account required.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://www.eporner.com/api/",
+    capabilities: ["search", "details", "discover", "scenes", "streams", "health"],
+    configSchema: [],
+  },
+  {
+    id: "pmvhaven", name: "PMVHaven", category: "AV",
+    description: "The dedicated PMV/HMV community platform — public keyless browse API (tags, sorting, pagination) with DIRECT MP4 playback from its own storage. Text search needs a platform key upstream, so it is honestly absent. Subcategory: PMV (HMV rail served from the same source).",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://pmvhaven.com",
+    capabilities: ["discover", "details", "scenes", "streams", "health"],
+    configSchema: [],
+  },
+  {
+    id: "hanime", name: "Hanime1", category: "AV",
+    description: "Hentai streaming from hanime1.me — public search and watch pages parsed for the site's own signed MP4 streams, resolved fresh per request via the challenge-resilient transport. Subcategory: HENTAI.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://hanime1.me",
+    capabilities: ["search", "details", "discover", "scenes", "streams", "health"],
+    configSchema: [],
+  },
+  {
+    id: "r18dev", name: "r18.dev (JAV metadata)", category: "AV",
+    description: "r18.dev's public CC0 JSON metadata API — exact DVD-code lookups (cast, maker, label, categories, covers) plus the OFFICIAL free trailer MP4 from DMM's public CDN. No text search exists upstream; pair with JavDB for code discovery. Subcategory: JAV.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://r18.dev",
+    capabilities: ["search", "details", "scenes", "streams", "health", "metadata"],
+    configSchema: [],
+  },
+  {
+    id: "javdb", name: "JavDB", category: "AV",
+    description: "JAV metadata database (javdb.com) — user-initiated search by code/title with cast, studio, dates, covers and public magnet links handed to your own torrent client. Politeness-limited, cached, no crawler. Metadata only — JavDB hosts no video. Subcategory: JAV.",
+    version: "1.0.0", author: "yozora-labs", homepage: "https://javdb.com",
+    capabilities: ["search", "details", "download", "health", "metadata"],
     configSchema: [],
   },
   {
@@ -161,7 +203,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
   },
   {
     id: "stashdb", name: "StashDB", category: "AV",
-    description: "Community scene/performer/studio metadata for general adult video, via the official stash-box GraphQL API (docs.stashapp.cc). REQUIRES A FREE API KEY (stashdb.org → account settings). Metadata only — playback stays an explicit external action. Subcategory: AV.",
+    description: "Community scene/performer/studio metadata for WESTERN studio scenes via the official stash-box GraphQL API (docs.stashapp.cc). REQUIRES A FREE API KEY (stashdb.org → account settings) — there is no public no-key path upstream. Metadata only. Subcategory: WESTERN.",
     version: "1.0.0", author: "yozora-labs", homepage: "https://docs.stashapp.cc",
     capabilities: ["search", "details", "discover", "health", "metadata"],
     configSchema: [

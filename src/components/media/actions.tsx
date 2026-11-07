@@ -59,20 +59,8 @@ export function useLibraryMutation(work: WorkRefInfo) {
 }
 
 export function AddToLibraryButton({ work, library, hub }: { work: WorkRefInfo; library: LibraryState | null; hub: string }) {
-  const { user, demoLogin } = useAuth();
+  const { user } = useAuth();
   const mutation = useLibraryMutation(work);
-
-  if (!user) {
-    return (
-      <Button
-        variant="ghost"
-        className="rounded-2xl border border-white/15 bg-white/10 font-semibold text-white hover:bg-white/15"
-        onClick={() => void demoLogin().then(() => toast.success("Signed in as demo reader"))}
-      >
-        <LibraryIcon className="mr-1.5 h-4 w-4" /> Add to library
-      </Button>
-    );
-  }
 
   const statusLabel = library ? LIBRARY_STATUSES.find((s) => s.key === library.status)?.label ?? library.status : null;
 
@@ -130,7 +118,7 @@ export function FavoriteButton({ work, favorite, hub }: { work: WorkRefInfo; fav
       style={favorite ? { background: `${hub}25`, color: hub } : undefined}
       aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
       onClick={() => user && mutation.mutate({ favorite: !favorite })}
-      title={user ? undefined : "Sign in to favorite"}
+      title={undefined}
     >
       <Heart className={cn("h-4.5 w-4.5", favorite && "fill-current")} />
     </button>
@@ -374,7 +362,7 @@ export function ReviewSection({ work, reviews, hub, rating, ratingCount }: {
         </div>
       ) : (
         <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-          Sign in to write a review.
+          Share your thoughts below — stored locally on this device.
         </p>
       )}
 

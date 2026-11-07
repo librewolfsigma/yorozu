@@ -33,8 +33,7 @@ export default function ProfileView() {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <User className="h-10 w-10 text-muted-foreground" />
-        <p className="mt-4 font-semibold">Sign in to view your profile</p>
-        <a href="#/settings" className="mt-4 text-sm font-semibold text-[#3DB4F2] hover:underline">Go to sign in →</a>
+        <p className="mt-4 font-semibold">Profile is unavailable right now</p>
       </div>
     );
   }
@@ -55,7 +54,7 @@ export default function ProfileView() {
           )}
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-3xl text-white">{user.displayName}</h1>
-            <p className="text-[13px] text-muted-foreground">@{user.username}{user.isDemo ? " · demo account" : ""} · member since {new Date(user.createdAt).toLocaleDateString()}</p>
+            <p className="text-[13px] text-muted-foreground">local profile · this device · member since {new Date(user.createdAt).toLocaleDateString()}</p>
             {user.bio && <p className="mt-2 max-w-lg text-[13.5px] leading-relaxed text-foreground/80">{user.bio}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

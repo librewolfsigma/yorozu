@@ -46,17 +46,55 @@ export async function destroySession(): Promise<void> {
 export async function getCurrentUser() {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
-  const session = await db.session.findUnique({
-    where: { token },
-    include: { user: true },
-  });
-  if (!session) return null;
-  if (session.expiresAt.getTime() < Date.now()) {
-    await db.session.delete({ where: { id: session.id } }).catch(() => {});
-    return null;
+  if (token) {
+    const session = await db.session.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+    if (session) {
+      if (session.expiresAt.getTime() > Date.now()) return session.user;
+      await db.session.delete({ where: { id: session.id } }).catch(() => {});
+    }
   }
-  return session.user;
+  // Yozora has NO login — every visitor transparently continues as this
+  // device's local profile. Nothing is gated, nothing is asked.
+  return ensureLocalSession(jar);
+}
+
+const LOCAL_USERNAME = "local";
+
+async function ensureLocalSession(jar: Awaited<ReturnType<typeof cookies>>) {
+  let user = await db.user.findUnique({ where: { username: LOCAL_USERNAME } });
+  if (!user) {
+    user = await db.user
+      .create({
+        data: {
+          username: LOCAL_USERNAME,
+          displayName: "Local viewer",
+          // Unusable random secret — no password login exists in Yozora.
+          passwordHash: crypto.randomBytes(32).toString("hex"),
+          isDemo: true,
+        },
+      })
+      .catch(() => db.user.findUnique({ where: { username: LOCAL_USERNAME } })); // concurrent-create race
+  }
+  if (!user) return null;
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 365 * 86400_000);
+  await db.session.create({ data: { token, userId: user.id, expiresAt } });
+  try {
+    jar.set(SESSION_COOKIE, token, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      expires: expiresAt,
+    });
+  } catch {
+    // Cookie writes are only permitted inside route handlers/server actions.
+    // In RSC render contexts this is a no-op — the request still resolves.
+  }
+  return user;
 }
 
 export async function isAgeVerified(): Promise<boolean> {

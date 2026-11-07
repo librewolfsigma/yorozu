@@ -83,7 +83,7 @@ export default function CollectionsView() {
         <Layers className="h-10 w-10 text-muted-foreground" />
         <p className="mt-4 font-semibold">Collections</p>
         <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-          Curate sets of titles — reading lists, moods, rewatch piles. Sign in to build your first one.
+          Curate sets of titles — reading lists, moods, rewatch piles. Build your first one right here.
         </p>
       </div>
     );

@@ -125,7 +125,7 @@ export default function LibraryView() {
         <LibraryIcon className="h-10 w-10 text-muted-foreground" />
         <p className="mt-4 font-semibold">Your library lives here</p>
         <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-          Track everything you read, watch and play across categories. Sign in to get started.
+          Track everything you read, watch and play across categories. No account needed — Yozora has no login.
         </p>
         <a href="#/settings" className="mt-4 text-sm font-semibold text-[#3DB4F2] hover:underline">Go to sign in →</a>
       </div>

@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search, Bell, MoonStar, Home, Compass, Library, Layers, History,
-  Puzzle, FileCode2, Database, User, Settings, LogOut, ShieldCheck,
+  Puzzle, FileCode2, Database, User, Settings, ShieldCheck,
   ChevronDown, Sparkles, X,
 } from "lucide-react";
 import { useAuth } from "@/components/providers";
@@ -47,7 +47,7 @@ function isActive(currentPath: string, itemPath: string): boolean {
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const { route } = useHashRoute();
-  const { user, logout, demoLogin } = useAuth();
+  const { user } = useAuth();
   const [searchOpen, setSearchOpen] = useState(false);
   const [q, setQ] = useState("");
   const [headerSolid, setHeaderSolid] = useState(false);
@@ -153,18 +153,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           {/* notifications */}
           {user && <NotificationBell />}
 
-          {/* user */}
-          {user ? (
-            <UserMenu />
-          ) : (
-            <Button
-              size="sm"
-              className="ml-1 h-9 rounded-lg bg-[#3DB4F2] px-4 font-bold text-[#04121E] hover:bg-[#1E97D8] hover:text-white"
-              onClick={() => void demoLogin().then(() => toast.success("Signed in as demo reader"))}
-            >
-              Sign in
-            </Button>
-          )}
+          {/* user — always present: Yozora has no login, just a local profile */}
+          <UserMenu />
         </div>
       </header>
 
@@ -380,15 +370,13 @@ function NotificationBell() {
 }
 
 function UserMenu() {
-  const { user, logout } = useAuth();
-  const [loggingOut, setLoggingOut] = useState(false);
+  const { user } = useAuth();
   if (!user) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="ml-1 flex h-9 items-center gap-1.5 rounded-lg pl-1 pr-2 transition-colors hover:bg-white/5" aria-label="Account menu">
+        <button className="ml-1 flex h-9 items-center gap-1.5 rounded-lg pl-1 pr-2 transition-colors hover:bg-white/5" aria-label="Profile menu">
           {user.avatarUrl ? (
-             
             <img src={user.avatarUrl} alt="" className="h-7 w-7 rounded-lg" />
           ) : (
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#3DB4F2] text-xs font-bold text-[#04121E]">
@@ -401,7 +389,7 @@ function UserMenu() {
       <DropdownMenuContent align="end" className="w-56 rounded-xl border-border">
         <DropdownMenuLabel>
           <p className="text-sm font-bold">{user.displayName}</p>
-          <p className="text-xs font-normal text-muted-foreground">@{user.username}{user.isDemo ? " · demo account" : ""}</p>
+          <p className="text-xs font-normal text-muted-foreground">local profile · this device · no account</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => navigate("/profile")} className="gap-2">
@@ -412,18 +400,6 @@ function UserMenu() {
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => navigate("/settings")} className="gap-2">
           <Settings className="h-4 w-4" /> Settings
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="gap-2 text-[#EF5B6B] focus:text-[#EF5B6B]"
-          onClick={async () => {
-            setLoggingOut(true);
-            await logout();
-            setLoggingOut(false);
-            toast("Signed out");
-          }}
-        >
-          {loggingOut ? <X className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -110,19 +110,43 @@ never a fake player.
 `/api/chapters/[id]`, `/api/downloads*`, `/api/recommendations`,
 `/api/sync/run`, `/api/gallery-fav`.
 
-## 6. AV taxonomy (the AV ≠ JAV fix)
+## 6. AV taxonomy (the AV = JAV correction)
 
-`AV` is the **category**; `videoKind` is the **subcategory**:
+`AV` is the **category**; `videoKind` is the **subcategory**. Per the
+user-corrected taxonomy, **AV and JAV are the same thing** — "AV" IS Japanese
+Adult Video. The slices that remain distinct:
 
-* `AV` — general / Western adult video & adult animation (Rule34Video, StashDB)
-* `JAV` — Japanese adult video (JAVStash) — its own subcategory, never blended
-* `PMV` — porn music videos (PMV Stash)
-* `HMV` — hentai music videos (matched from PMV Stash tags)
+* `JAV` — the AV category itself (JavDB, r18.dev, XVideos, JAVStash)
+* `WESTERN` — western studio scenes (StashDB — optional free API key)
 * `CREATOR` — independent/clip-store creators (FansDB)
+* `PMV` — porn music video edits (PMVHaven, EPorner rail, PMV Stash)
+* `HMV` — hentai music video edits (PMVHaven HMV rail)
+* `HENTAI` — adult animation / CG clips (Rule34Video, Hanime1)
 
 Browse/Search render **subcategory tabs** for the AV category and never merge
 them into Anime. Metadata ≠ playback: stash-box sources are metadata-only
 (free API key required) and say so.
+
+## 6b. No login, ever
+
+Yozora has **no accounts and no login**. `getCurrentUser()` transparently
+continues every visitor as this device's local profile (`username: "local"`,
+created on first request, unusable random secret). All tracking features —
+library, progress, collections, reviews, history — work from the first visit
+with zero sign-up friction. The only gate that remains is the 18+ age
+confirmation, which is a legal declaration, not an account.
+
+## 6c. Playback resilience
+
+Streams are short-lived signed URLs on most sources, so:
+
+* units cache TTL is 60 s (`TTL.UNITS`) — never serve a stale token
+* `/api/img` retries 403/503 with a force-refreshed cookie jar, then falls
+  back to a **curl streaming transport** (Range supported, challenge sniffed
+  by first byte, cookie refresh through curl itself on rotation)
+* the player attaches **hls.js** for `.m3u8` streams and renders an honest
+  "Try a fresh resolve / Open at source" panel on playback failure — a dead
+  stream can never crash the view with NotSupportedError
 
 ## 7. Honesty matrix (reporting standard)
 

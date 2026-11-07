@@ -16,17 +16,29 @@ import { cached, TTL } from "@/lib/cache";
 
 // ─── capability declarations (honest: what the adapter really does) ───
 
-const CAN_WATCH = new Set(["rule34video"]);
+const CAN_WATCH = new Set([
+  "rule34video", "xvideos", "eporner", "hanime", "pmvhaven", "r18dev",
+]);
 const CAN_READ = new Set(["mangadex", "ehentai", "manga18fx"]);
 const CAN_VIEW = new Set(["e621", "yandere", "hypnohub", "gelbooru"]);
 
-/** Fixed AV subcategory per provider — JAV/PMV/HMV/CREATOR never merge into AV. */
+/**
+ * Fixed AV subcategory per provider. AV and JAV are THE SAME category
+ * (user-corrected taxonomy): Japanese Adult Video. Distinct slices that
+ * remain: WESTERN scenes, CREATOR clips, PMV/HMV edits, HENTAI animation.
+ */
 export const PROVIDER_VIDEO_KIND: Record<string, string> = {
-  stashdb: "AV",
-  rule34video: "AV",
+  javdb: "JAV",
+  r18dev: "JAV",
+  xvideos: "JAV",
   javstash: "JAV",
+  stashdb: "WESTERN",
   fansdb: "CREATOR",
-  pmvstash: "PMV", // adapter also tags HMV items from upstream tags
+  pmvhaven: "PMV",
+  pmvstash: "PMV",
+  eporner: "PMV", // rail tuned to PMV search; search covers everything
+  rule34video: "HENTAI",
+  hanime: "HENTAI",
 };
 
 export interface ProviderDTO {
@@ -291,7 +303,8 @@ export async function discoverCategory(category: string, kind?: string) {
   let scope = installed.filter((p) => p.category === category);
   if (kind) {
     if (kind === "HMV") {
-      // HMV content lives on PMV Stash alongside PMV
+      // HMV edits live on PMV platforms alongside PMV — pmvhaven serves its
+      // HMV rail via opts.kind; pmvstash (key-gated) keeps PMV listing.
       scope = scope.filter((p) => PROVIDER_VIDEO_KIND[p.id] === "PMV");
     } else {
       scope = scope.filter((p) => PROVIDER_VIDEO_KIND[p.id] === kind);
@@ -305,7 +318,7 @@ export async function discoverCategory(category: string, kind?: string) {
       try {
         if (!adapter?.popular) throw new ApiError(501, `${p.name} exposes no popular listing (search-only source)`);
         assertUsable(p);
-        const items = await cached("rails", `${p.id}:1`, TTL.RAILS, () => adapter.popular!({ page: 1 }));
+        const items = await cached("rails", `${p.id}:1:${kind ?? ""}`, TTL.RAILS, () => adapter.popular!({ page: 1, kind }));
         rails.push({
           providerId: p.id,
           providerName: p.name,
@@ -365,7 +378,10 @@ export async function getWork(providerId: string, externalId: string) {
   let units: LiveUnits | null = null;
   if (adapter?.units) {
     assertUsable(dto);
-    units = await cached("units", `${def.id}:${externalId}`, TTL.WORK, () => adapter.units!(externalId)).catch(() => null);
+    // Units carry PLAYABLE URLs that are often short-lived signed tokens
+    // (KVS get_file, xvideos secure links, eporner XHR). Cache them briefly —
+    // a stale token is exactly what breaks playback with expired-URL 403s.
+    units = await cached("units", `${def.id}:${externalId}`, TTL.UNITS, () => adapter.units!(externalId)).catch(() => null);
   }
 
   // "Popular on <provider>" rail (replaces the old local recommendations table)

@@ -12,8 +12,10 @@ const ALLOWED_HOSTS = new Set([
   "mangadex.org", "uploads.mangadex.org",
   "manga18fx.com", "img01.manga18fx.com", "img02.manga18fx.com", "img03.manga18fx.com",
   "wholesomelist.com", "imgchest.com", "cdni.imgchest.com", "s.imgchest.com",
-  // av
+  // av — tube/metadata sources (CDNs matched by suffix below)
   "rule34video.com", "javdb.com", "c0.jdbstatic.com", "c1.jdbstatic.com",
+  "www.xvideos.com", "www.eporner.com", "hanime1.me", "vdownload.hembed.com",
+  "pmvhaven.com", "r18.dev",
   // stash-box family (scene covers/CDN assets; scenes themselves never proxied)
   "stashdb.org", "javstash.org", "fansdb.cc", "pmvstash.org",
   // anime
@@ -23,6 +25,18 @@ const ALLOWED_HOSTS = new Set([
   // torrents thumbnails
   "sukebei.nyaa.si",
 ]);
+
+// Rotating CDN hosts used by video providers — matched by suffix because the
+// exact shard hostnames change constantly (this is the official pattern:
+// providers hand out random CDN hostnames per request).
+const ALLOWED_HOST_SUFFIXES = [
+  ".xvideos-cdn.com", // xvideos mp4/hls/thumb shards (mp4-gcore., hls-gcore., thumb-cdn77.…)
+  ".eporner.com", // eporner vid-*.cdn shards
+  ".cloud.ovh.net", // PMVHaven's OVH object storage (pmvhavencloud.s3.…io.cloud.ovh.net)
+  ".dmm.co.jp", // r18.dev covers (pics.dmm.co.jp) + official trailers (cc3001.dmm.co.jp)
+  ".hembed.com", // hanime1.me stream host (vdownload.hembed.com)
+  ".jdbstatic.com", // javdb cover shards
+];
 
 // H@H CDN client hosts (e-hentai distributed image servers) — matched by
 // suffix because client hostnames vary (xxx.dhportvgmptc.hath.network etc.).
@@ -52,6 +66,12 @@ const REFERER_FOR: Record<string, string> = {
   "yande.re": "https://yande.re/",
   "e621.net": "https://e621.net/",
   "static1.e621.net": "https://e621.net/",
+  "www.xvideos.com": "https://www.xvideos.com/",
+  "www.eporner.com": "https://www.eporner.com/",
+  "hanime1.me": "https://hanime1.me/",
+  "vdownload.hembed.com": "https://hanime1.me/",
+  "pmvhaven.com": "https://pmvhaven.com/",
+  "r18.dev": "https://r18.dev/",
 };
 
 export const BROWSER_UA =
@@ -61,7 +81,26 @@ export function isAllowedMediaUrl(raw: string): boolean {
   try {
     const u = new URL(raw);
     if (u.protocol !== "https:") return false;
-    return ALLOWED_HOSTS.has(u.hostname) || isHathHost(u.hostname) || isMangaDexNetworkHost(u.hostname);
+    return (
+      ALLOWED_HOSTS.has(u.hostname) ||
+      ALLOWED_HOST_SUFFIXES.some((s) => u.hostname.endsWith(s)) ||
+      isHathHost(u.hostname) ||
+      isMangaDexNetworkHost(u.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Hosts whose bot protection intermittently rejects server-side TLS
+// fingerprints (ddos-guard). When the plain fetch path fails, /api/img
+// retries the same public resource through the system curl binary — the
+// same real request a browser extension would make.
+const CURL_FALLBACK_HOSTS = new Set(["rule34video.com", "hanime1.me", "javdb.com"]);
+
+export function curlFallbackFor(raw: string): boolean {
+  try {
+    return CURL_FALLBACK_HOSTS.has(new URL(raw).hostname);
   } catch {
     return false;
   }

@@ -32,17 +32,24 @@ every adapter below with live network calls.
 | Gelbooru | GATED | dapi JSON — needs user's free API key | upstream 401 without key (endpoint proven) |
 | Danbooru | NOT INTEGRATED (temporary) | API exists but site was down ("Downbooru") during both verification attempts — adapter withheld until verifiable, per no-unverified-code rule |
 
-## AV / JAV / PMV / Creator video (metadata)
-Subcategories stay DISTINCT (AV / JAV / PMV / HMV / CREATOR) — never merged into Anime.
+## AV / JAV / PMV / HMV / Creator / Hentai video
+TAXONOMY (user-corrected 2026-11): **AV and JAV are the same category** — "AV" IS Japanese Adult Video.
+The distinct slices that remain: WESTERN studio scenes, CREATOR clips, PMV/HMV edits, HENTAI animation.
 | Provider | Status | Integration | Evidence |
 |---|---|---|---|
-| StashDB | GATED | stash-box GraphQL (stashdb.org/graphql, docs.stashapp.cc), ApiKey header | endpoint answers GraphQL; every read "not authorized" without key (verified) |
-| JAVStash | GATED | same protocol, javstash.org | same evidence |
-| FansDB | GATED | same protocol, fansdb.cc | same evidence |
-| PMV Stash | GATED | same protocol, pmvstash.org | same evidence |
+| JavDB | REAL | Public HTML search/detail pages (javdb.com), curl-resilient transport + politeness limiter (robots crawl-delay respected; user-initiated, cached) | 20 results for "SSIS-700" with codes/covers/magnets; detail page parsed (cast, studio, magnet) |
+| r18.dev | REAL | Public CC0 JSON API (r18.dev/videos/vod/movies/detail/-/dvd_id=<CODE>/json); exact-code lookups + OFFICIAL trailer MP4 (DMM public CDN) | MIDE-500 → full metadata 200 + trailer mp4 stream verified in-app |
+| XVideos | REAL + in-site playback | Public HTML search + html5player variables (setVideoUrlHigh/setVideoHLS) resolved fresh per request; signed URLs never cached long | 24 search hits "jav"; direct mp4 stream proxied 206 video/mp4 |
+| EPorner | REAL + in-site playback | OFFICIAL public JSON API (eporner.com/api/v2, no key) + site's own player XHR (hash → base36 calc → sources.mp4) | 24 PMV hits; top-weekly id → direct 2160p/720p mp4 (206 in-app); brand-new uploads honestly rejected during processing window |
+| PMVHaven | REAL + in-site playback | Public keyless browse API (/api/videos?tags=&sort=&page=) with DIRECT MP4s on its OVH storage; text search needs a platform key upstream → honestly absent | 24 PMV hits; direct 206 video/mp4 playback verified in-app (1280p) |
+| Hanime1 | REAL + in-site playback | Public HTML search/watch pages (hanime1.me), curl-resilient transport; site's own signed MP4s resolved fresh | 40 hits; watch page → vdownload.hembed.com 720p mp4 verified in-app |
+| Rule34Video | REAL + in-site playback | Public KVS site; MP4 URLs the player itself exposes (flashvars); curl-resilient transport + 45s token freshness; /api/img retries with fresh cookies then streams via curl | 23-24 search hits; direct stream 206 video/mp4 — the previously-crashing expired-token case now plays (verified in browser) |
+| StashDB | GATED (WESTERN) | stash-box GraphQL (stashdb.org/graphql), ApiKey header — NO public no-key path exists upstream (verified) | endpoint answers GraphQL; every read "not authorized" without key (verified) |
+| JAVStash | GATED (JAV) | same protocol, javstash.org | same evidence |
+| FansDB | GATED (CREATOR) | same protocol, fansdb.cc | same evidence |
+| PMV Stash | GATED (PMV) | same protocol, pmvstash.org | same evidence |
 | ThePornDB | NOT INTEGRATED | api.theporndb.net behind Cloudflare challenge for datacenter IPs; endpoint shape unverifiable from sandbox — no adapter shipped rather than guess |
-| JAVInfo | NOT INTEGRATED | no documented public API verifiable from sandbox (site 200) |
-| Rule34Video | REAL + in-site playback | Public KVS site; MP4 URLs the player itself exposes (flashvars); no auth/DRM bypassed | 24 search hits; direct streams proxied with Range support |
+| JavBus / JavLibrary / MissAV | NOT INTEGRATED | Cloudflare/ddos-guard challenge pages from this network on every transport — no adapter shipped (no fakes) |
 
 ## Games / Scripts / Misc
 | Provider | Status | Integration | Evidence |

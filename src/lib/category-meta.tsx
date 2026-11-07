@@ -31,14 +31,17 @@ export function categoryMeta(key: string): CategoryMeta {
   return CATEGORIES.find((c) => c.key === key) ?? CATEGORIES[7];
 }
 
-// AV subcategories — DISTINCT by design (AV ≠ JAV; never merged into Anime).
+// AV subcategories. TAXONOMY (user-corrected): AV and JAV are THE SAME
+// category — "AV" IS Japanese Adult Video. The distinct slices that remain:
+// western studio scenes, creator/indie clips, PMV/HMV edits, hentai animation.
 export const VIDEO_KINDS: { key: string; label: string; blurb: string }[] = [
   { key: "", label: "All video", blurb: "Every adult-video subcategory" },
-  { key: "AV", label: "AV · Western/Animated", blurb: "General & western adult video, adult animation (Rule34Video, StashDB)" },
-  { key: "JAV", label: "JAV", blurb: "Japanese adult video — its own subcategory (JAVStash)" },
-  { key: "PMV", label: "PMV", blurb: "Porn music video edits (PMV Stash)" },
-  { key: "HMV", label: "HMV", blurb: "Hentai music video edits (PMV Stash)" },
+  { key: "JAV", label: "AV · JAV", blurb: "Japanese adult video — the AV category itself (JavDB, r18.dev, XVideos, JAVStash)" },
+  { key: "WESTERN", label: "Western scenes", blurb: "Studio scene metadata (StashDB — optional free API key)" },
   { key: "CREATOR", label: "Creator", blurb: "Independent & clip-store creators (FansDB)" },
+  { key: "PMV", label: "PMV", blurb: "Porn music video edits (PMVHaven, EPorner, PMV Stash)" },
+  { key: "HMV", label: "HMV", blurb: "Hentai music video edits (PMVHaven)" },
+  { key: "HENTAI", label: "Hentai & animated", blurb: "Adult animation / CG clips (Rule34Video, Hanime1)" },
 ];
 
 export function videoKindLabel(kind: string | null | undefined): string {

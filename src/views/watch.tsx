@@ -1,14 +1,17 @@
 "use client";
 
 // Cinema view — plays one episode resolved live from /api/work.
-// If the provider serves no stream, this view says so and links out —
-// it never renders a fake player (docs/CLIENT_ARCHITECTURE.md §5).
+// Playback stack: direct MP4 via <video>, HLS (.m3u8) via hls.js.
+// If the provider serves no stream — or the stream fails (expired token,
+// bot-challenge, geo) — this view says so honestly and links out.
+// It never renders a fake player and never crashes on a dead src
+// (docs/CLIENT_ARCHITECTURE.md §5).
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize2,
-  AlertTriangle, ChevronLeft, ChevronRight,
+  AlertTriangle, ChevronLeft, ChevronRight, Loader2,
 } from "lucide-react";
 import { api, post } from "@/lib/client-api";
 import { navigate } from "@/hooks/use-hash-route";
@@ -36,20 +39,24 @@ interface WorkDetail {
   ref: string;
 }
 
-/** Fire-and-forget progress POST — silently ignored when signed out (401). */
+/** Fire-and-forget progress POST — Yozora has no login; the local profile always accepts it. */
 export function reportProgress(payload: Record<string, unknown>): void {
   void post("/api/progress", payload).catch(() => {
-    /* signed-out or offline — progress is best-effort, never noisy */
+    /* offline — progress is best-effort, never noisy */
   });
 }
 
 export default function WatchView({ provider, id, episodeKey }: { provider?: string | null; id?: string | null; episodeKey?: string | null }) {
   const { user } = useAuth();
+  const qc = useQueryClient();
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [buffering, setBuffering] = useState(true);
+  const [videoError, setVideoError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<{ destroy: () => void } | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["work", provider, id],
@@ -65,8 +72,21 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
   const isAV = work?.category === "AV";
   const backHref = provider && id ? `/media?p=${encodeURIComponent(provider)}&id=${encodeURIComponent(id)}` : "/";
 
-  // position/duration/playing self-correct as the new <video> (keyed by ep.key)
-  // fires onLoadedMetadata / onTimeUpdate / onPlay — no reset effect needed.
+  // Reset player state when the episode (and therefore the src) changes.
+  useEffect(() => {
+    setVideoError(false);
+    setBuffering(true);
+    setPosition(0);
+    setDuration(0);
+  }, [ep?.key]);
+
+  // Tear down any hls.js instance on unmount / src change.
+  useEffect(() => {
+    return () => {
+      hlsRef.current?.destroy();
+      hlsRef.current = null;
+    };
+  }, [ep?.key, ep?.streamUrl]);
 
   const syncNow = useCallback(
     (positionSec: number, completed = false) => {
@@ -104,9 +124,8 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
   useEffect(() => {
     const v = videoRef.current;
     const epAtMount = ep;
-    const signedIn = !!user;
     return () => {
-      if (signedIn && epAtMount && v && v.duration > 0) {
+      if (epAtMount && v && v.duration > 0) {
         syncNowRef.current(v.currentTime, v.currentTime / v.duration > 0.9);
       }
     };
@@ -114,10 +133,52 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
-    if (!v) return;
-    if (v.paused) void v.play();
-    else v.pause();
-  }, []);
+    if (!v || videoError) return;
+    if (v.paused) {
+      // play() rejects with NotSupportedError when the src is dead/wrong —
+      // surface the honest error panel instead of an uncaught exception.
+      v.play().catch(() => setVideoError(true));
+    } else {
+      v.pause();
+    }
+  }, [videoError]);
+
+  // Attach hls.js when the stream is HLS (browsers other than Safari cannot
+  // play .m3u8 natively). Direct mp4 just uses the src attribute.
+  useEffect(() => {
+    const v = videoRef.current;
+    const url = ep?.streamUrl;
+    if (!v || !url) return;
+    if (v.canPlayType("application/vnd.apple.mpegurl") && url.includes(".m3u8")) {
+      v.src = url; // Safari native HLS
+      return;
+    }
+    if (!url.includes(".m3u8")) return; // plain mp4 — src attribute handles it
+    let cancelled = false;
+    void import("hls.js").then(({ default: Hls }) => {
+      if (cancelled || !videoRef.current) return;
+      if (!Hls.isSupported()) {
+        setVideoError(true);
+        return;
+      }
+      const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+      hlsRef.current = hls;
+      hls.loadSource(url);
+      hls.attachMedia(videoRef.current);
+      hls.on(Hls.Events.ERROR, (_evt, data) => {
+        if (data.fatal) setVideoError(true);
+      });
+    });
+    return () => { cancelled = true; };
+  }, [ep?.key, ep?.streamUrl]);
+
+  const retryStream = useCallback(() => {
+    // Fresh resolve: drop the cached units (expired tokens are the usual
+    // culprit) and let the refetched src remount the player.
+    setVideoError(false);
+    setBuffering(true);
+    void qc.invalidateQueries({ queryKey: ["work", provider, id] });
+  }, [qc, provider, id]);
 
   const enc = encodeURIComponent;
   const watchHref = (key: string) => `/watch?p=${enc(provider!)}&id=${enc(id!)}&ep=${enc(key)}`;
@@ -189,24 +250,61 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
         {/* player */}
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex flex-1 items-center justify-center bg-black p-0 lg:p-6">
-            {hasStream ? (
-              <video
-                key={ep.key}
-                ref={videoRef}
-                src={ep.streamUrl!}
-                controls
-                autoPlay
-                muted={muted}
-                playsInline
-                poster={ep.thumbnailUrl ?? work.coverUrl ?? undefined}
-                className="w-full"
-                style={{ maxHeight: "70vh" }}
-                onPlay={() => setPlaying(true)}
-                onPause={() => setPlaying(false)}
-                onTimeUpdate={(e) => setPosition(e.currentTarget.currentTime)}
-                onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                onEnded={() => syncNow(duration || ep.durationSec || 0, true)}
-              />
+            {hasStream && !videoError ? (
+              <div className="relative w-full" style={{ maxHeight: "70vh" }}>
+                <video
+                  key={ep.key}
+                  ref={videoRef}
+                  src={ep.streamType === "hls" ? undefined : ep.streamUrl!}
+                  controls
+                  autoPlay
+                  muted={muted}
+                  playsInline
+                  poster={ep.thumbnailUrl ?? work.coverUrl ?? undefined}
+                  className="mx-auto w-full"
+                  style={{ maxHeight: "70vh" }}
+                  onPlay={() => setPlaying(true)}
+                  onPause={() => setPlaying(false)}
+                  onTimeUpdate={(e) => setPosition(e.currentTarget.currentTime)}
+                  onLoadedMetadata={(e) => { setDuration(e.currentTarget.duration); setBuffering(false); }}
+                  onWaiting={() => setBuffering(true)}
+                  onPlaying={() => { setBuffering(false); setVideoError(false); }}
+                  onCanPlay={() => setBuffering(false)}
+                  onError={() => setVideoError(true)}
+                  onEnded={() => syncNow(duration || ep.durationSec || 0, true)}
+                />
+                {buffering && (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <Loader2 className="h-10 w-10 animate-spin text-white/70" />
+                  </div>
+                )}
+              </div>
+            ) : hasStream && videoError ? (
+              /* stream failed — expired token / bot challenge / dead CDN link */
+              <div className="mx-auto m-6 max-w-md rounded-2xl border border-border bg-card p-6 text-center">
+                <AlertTriangle className="mx-auto h-9 w-9 text-[#EF5B6B]" />
+                <p className="mt-3 font-bold">This stream could not be played</p>
+                <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+                  The link {work.providerName} served may have expired or is currently unreachable from here.
+                  Tube-site tokens rotate quickly — a fresh resolve usually fixes it.
+                </p>
+                <div className="mt-4 flex justify-center gap-2">
+                  <Button size="sm" className="rounded-lg text-[#04121E]" style={{ background: hub }} onClick={retryStream}>
+                    Try a fresh resolve
+                  </Button>
+                  {work.externalLinks.length > 0 && (
+                    <a
+                      href={work.externalLinks[0].url}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow"
+                      className="inline-flex h-9 items-center rounded-lg border px-4 text-[13px] font-bold"
+                      style={{ borderColor: `${hub}44`, background: `${hub}14`, color: hub }}
+                    >
+                      Open at source
+                    </a>
+                  )}
+                </div>
+              </div>
             ) : (
               /* honest panel — never a fake player */
               <div className="mx-auto m-6 max-w-md rounded-2xl border border-border bg-card p-6 text-center">
@@ -240,8 +338,8 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
             )}
           </div>
 
-          {/* custom controls (only when streaming) */}
-          {hasStream && (
+          {/* custom controls (only when streaming successfully) */}
+          {hasStream && !videoError && (
             <div className="flex items-center gap-3 border-t border-border/70 bg-[#0B1622]/95 px-4 py-3">
               <button onClick={togglePlay} className="flex h-10 w-10 items-center justify-center rounded-full text-[#04121E]" style={{ background: hub }} aria-label={playing ? "Pause" : "Play"}>
                 {playing ? <Pause className="h-4.5 w-4.5 fill-current" /> : <Play className="h-4.5 w-4.5 fill-current" />}
@@ -281,14 +379,12 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
                   </Button>
                 )}
               </div>
-              {user && (
-                <button
-                  className="text-xs font-semibold text-muted-foreground hover:text-foreground"
-                  onClick={() => { syncNow(position, true); toast.success("Marked as watched"); }}
-                >
-                  Mark as watched
-                </button>
-              )}
+              <button
+                className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+                onClick={() => { syncNow(position, true); toast.success("Marked as watched"); }}
+              >
+                Mark as watched
+              </button>
             </div>
           </div>
         </div>

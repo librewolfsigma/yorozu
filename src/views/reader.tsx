@@ -151,7 +151,7 @@ interface ChapterReaderProps {
 }
 
 function ChapterReader({ work, chapters, chapter, pages, pagesLoading, pagesFailed, pagesError, onPagesRetry, readHref, backHref }: ChapterReaderProps) {
-  const { user, demoLogin } = useAuth();
+  const { user } = useAuth();
   const [mode, setMode] = useState<"paged" | "webtoon">("webtoon");
   const [pageIdx, setPageIdx] = useState(0);
   const [fitWidth, setFitWidth] = useState(true);
@@ -298,10 +298,7 @@ function ChapterReader({ work, chapters, chapter, pages, pagesLoading, pagesFail
       <div className="relative flex-1 overflow-y-auto" onClick={() => setShowChrome((s) => !s)}>
         {!user && (
           <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-[#FFBE4A]/15 px-4 py-2 text-xs text-[#FFBE4A]">
-            <span>Progress tracking is off — sign in to sync your reading position.</span>
-            <button className="font-bold underline" onClick={(e) => { e.stopPropagation(); void demoLogin(); }}>
-              Demo login
-            </button>
+            <span>Progress tracking is unavailable right now.</span>
           </div>
         )}
 

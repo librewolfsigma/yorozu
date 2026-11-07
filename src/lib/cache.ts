@@ -61,4 +61,5 @@ export const TTL = {
   WORK: 5 * 60 * 1000,
   PAGES: 5 * 60 * 1000, // strictly shorter than MangaDex at-home expiry (~15 min)
   LISTINGS: 10 * 60 * 1000, // scripts/databases directories
+  UNITS: 60 * 1000, // playable URLs carry signed tokens — keep them fresh
 } as const;
