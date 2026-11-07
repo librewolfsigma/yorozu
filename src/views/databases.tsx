@@ -28,14 +28,16 @@ interface ProviderHealthRow {
 }
 
 function statusDot(status: string): string {
-  return status === "ACTIVE" ? "bg-[#3BD47A]" : status === "ERROR" ? "bg-[#EF5B6B]" : "bg-muted-foreground/40";
+  return status === "ACTIVE" ? "bg-[#3BD47A]" : status === "ERROR" ? "bg-[#EF5B6B]" : status === "UNCONFIGURED" ? "bg-[#FFBE4A]" : "bg-muted-foreground/40";
 }
 function statusBadge(status: string): string {
   return status === "ACTIVE"
     ? "bg-[#3BD47A]/15 text-[#3BD47A]"
     : status === "ERROR"
       ? "bg-[#EF5B6B]/15 text-[#FF8B96]"
-      : "bg-muted text-muted-foreground";
+      : status === "UNCONFIGURED"
+        ? "bg-[#FFBE4A]/15 text-[#FFBE4A]"
+        : "bg-muted text-muted-foreground";
 }
 
 export default function DatabasesView() {

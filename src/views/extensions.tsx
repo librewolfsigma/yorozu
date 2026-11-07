@@ -119,6 +119,13 @@ function StatusChip({ status }: { status: string }) {
       </span>
     );
   }
+  if (status === "UNCONFIGURED") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#FFBE4A]/15 px-2 py-0.5 text-[10px] font-bold text-[#FFBE4A]">
+        <KeyRound className="h-3 w-3" /> Needs key
+      </span>
+    );
+  }
   if (status === "ERROR") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-[#EF5B6B]/15 px-2 py-0.5 text-[10px] font-bold text-[#EF5B6B]">
@@ -133,7 +140,7 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-export default function ExtensionsView() {
+export default function ExtensionsView({ embedded }: { embedded?: boolean } | undefined) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [healthBusy, setHealthBusy] = useState<string | null>(null);
@@ -227,7 +234,8 @@ export default function ExtensionsView() {
   };
 
   return (
-    <div className="pb-6">
+    <div className={embedded ? "" : "pb-6"}>
+      {!embedded && (
       <div className="mb-5 flex items-center gap-3">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#3BD47A]/15 text-[#3BD47A]">
           <Puzzle className="h-5 w-5" />
@@ -242,7 +250,9 @@ export default function ExtensionsView() {
           {healthBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Check all health
         </Button>
       </div>
+      )}
 
+      {!embedded && (
       <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#3DB4F2]/25 bg-[#3DB4F2]/10 p-3 text-xs leading-relaxed text-foreground/85">
         <span className="font-bold text-[#3DB4F2]">How it works:</span>
         Every installed provider is a live adapter hitting its upstream API or site — health checks are real requests and
@@ -250,6 +260,7 @@ export default function ExtensionsView() {
         <button className="mx-1 underline" onClick={() => navigate("/browse/ANIME")}>Browse</button>
         and Search query the installed sources live, and one broken provider never breaks the rest.
       </div>
+      )}
 
       {/* upstream extension repositories */}
       <section className="mb-6">

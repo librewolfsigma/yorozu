@@ -1,5 +1,6 @@
 // Live adapter contract — every real provider implements this interface.
-// Results are normalized into the platform's CatalogItem shape.
+// Results are normalized into the platform's live WorkDTO shape (src/lib/serialize).
+// Nothing here persists: results flow to the client per request, TTL-cached only.
 
 export interface LiveSearchItem {
   externalId: string;

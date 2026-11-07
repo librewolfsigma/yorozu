@@ -3,8 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Search, Bell, MoonStar, Home, Library, Layers, History,
-  Puzzle, User, Settings, ShieldCheck,
+  Search, Bell, MoonStar, Home, Library, Layers, History, Compass, MoreHorizontal,
+  Puzzle, User, Settings, ShieldCheck, FileCode2, Database,
   ChevronDown, Sparkles, Image as ImageIcon, Images, Video,
 } from "lucide-react";
 import { useAuth } from "@/components/providers";
@@ -81,6 +81,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { route } = useHashRoute();
   const { user } = useAuth();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [q, setQ] = useState("");
   const [headerSolid, setHeaderSolid] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -393,7 +394,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      {/* ── Mobile bottom tabbar ── */}
+      {/* ── Mobile bottom tabbar — Aniyomi structure: Library / History /
+          Browse / More, with Home for the landing ── */}
       <nav
         className="fixed inset-x-0 bottom-0 z-50 flex h-14 items-stretch justify-around border-t border-border bg-[#151F2E]/95 backdrop-blur-lg lg:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
@@ -401,25 +403,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
       >
         {[
           { path: "/", label: "Home", icon: Home },
-          { path: "/sources", label: "Sources", icon: Puzzle, mobileOnly: true },
           { path: "/library", label: "Library", icon: Library },
-          { path: "/search", label: "Search", icon: Search, dialog: true },
-          { path: "/profile", label: "Profile", icon: User, mobileOnly: true },
+          { path: "/history", label: "History", icon: History },
+          { path: "/browse", label: "Browse", icon: Compass },
         ].map((item) => {
-          const active = item.dialog ? false : item.mobileOnly ? route.path === item.path : isActive(route.path, item.path);
+          const active = isActive(route.path, item.path);
           return (
             <a
               key={item.label}
-              href={item.dialog ? undefined : `#${item.path}`}
-              onClick={
-                item.dialog
-                  ? (e) => {
-                      e.preventDefault();
-                      setSearchOpen(true);
-                      setTimeout(() => inputRef.current?.focus(), 60);
-                    }
-                  : undefined
-              }
+              href={`#${item.path}`}
               className={cn(
                 "flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold",
                 active ? "hub-text" : "text-muted-foreground"
@@ -431,7 +423,56 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </a>
           );
         })}
+        <button
+          onClick={() => setMoreOpen(true)}
+          className={cn(
+            "flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold",
+            moreOpen ? "hub-text" : "text-muted-foreground"
+          )}
+          style={{ ["--hub" as string]: "#3DB4F2" }}
+          aria-label="More menu"
+        >
+          <MoreHorizontal className="h-5 w-5" />
+          More
+        </button>
       </nav>
+
+      {/* ── Mobile More sheet (Aniyomi "More" tab) ── */}
+      <Dialog open={moreOpen} onOpenChange={setMoreOpen}>
+        <DialogContent className="max-w-xs rounded-2xl border-border bg-card p-2" aria-describedby={undefined}>
+          <DialogHeader className="sr-only">
+            <DialogTitle>More</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-1.5 p-1">
+            {[
+              { label: "Profile", icon: User, path: "/profile" },
+              { label: "Search", icon: Search, path: null },
+              { label: "Collections", icon: Layers, path: "/collections" },
+              { label: "Extensions", icon: Puzzle, path: "/extensions" },
+              { label: "Scripts", icon: FileCode2, path: "/scripts" },
+              { label: "Databases", icon: Database, path: "/databases" },
+              { label: "Settings", icon: Settings, path: "/settings" },
+              { label: "Policy", icon: ShieldCheck, path: "/policy" },
+            ].map((m) => (
+              <button
+                key={m.label}
+                onClick={() => {
+                  setMoreOpen(false);
+                  if (m.path) navigate(m.path);
+                  else {
+                    setSearchOpen(true);
+                    setTimeout(() => inputRef.current?.focus(), 60);
+                  }
+                }}
+                className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-white/[0.03] p-3 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+              >
+                <m.icon className="h-4.5 w-4.5" />
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

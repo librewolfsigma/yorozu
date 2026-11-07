@@ -202,7 +202,7 @@ export default function HomeView() {
                       <span
                         className={cn(
                           "h-1.5 w-1.5 rounded-full",
-                          p.configRequired ? "bg-[#FFBE4A]" : p.status === "ERROR" ? "bg-[#EF5B6B]" : p.status === "ACTIVE" ? "bg-[#3BD47A]" : "bg-muted-foreground/40",
+                          p.configRequired || p.status === "UNCONFIGURED" ? "bg-[#FFBE4A]" : p.status === "ERROR" ? "bg-[#EF5B6B]" : p.status === "ACTIVE" ? "bg-[#3BD47A]" : "bg-muted-foreground/40",
                         )}
                       />
                       {p.videoKind ? videoKindLabel(p.videoKind) : m.label}

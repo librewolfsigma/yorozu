@@ -114,7 +114,7 @@ function defToDTO(def: ProviderDef, row: Parameters<typeof overlayToStatus>[0]):
     capabilities: def.capabilities,
     configSchema: def.configSchema,
     config: s.config,
-    status: !s.installed ? "DISABLED" : missing.length ? "ERROR" : s.status,
+    status: !s.installed ? "DISABLED" : missing.length ? "UNCONFIGURED" : s.status,
     lastError: s.lastError,
     lastCheckedAt: s.lastCheckedAt,
     installed: s.installed,
@@ -122,6 +122,17 @@ function defToDTO(def: ProviderDef, row: Parameters<typeof overlayToStatus>[0]):
     configRequired: missing.length > 0,
     availability: capabilitiesFor(def),
   };
+}
+
+/**
+ * SECURITY: API responses must NEVER include provider `config` — those are
+ * the user's own credentials (API keys). Everything that crosses an HTTP
+ * boundary goes through this sanitizer; internal engine code keeps using the
+ * full DTO. `configRequired` already tells the UI what it needs.
+ */
+export function toPublicProvider(p: ProviderDTO): Omit<ProviderDTO, "config"> & { config?: undefined } {
+  const { config: _config, ...pub } = p;
+  return { ...pub, lastError: p.configRequired ? null : p.lastError };
 }
 
 // ─── listing (registry + overlay; no counts — there is no catalog) ───
@@ -243,8 +254,10 @@ export async function healthCheck(id: string) {
     status = "DISABLED";
     lastError = "Provider is disabled.";
   } else if (dto.configRequired) {
-    status = "ERROR";
-    lastError = `Configuration required: set the provider's API key(s) in Extensions. This is expected until you add them — the provider reports it honestly instead of faking results.`;
+    // Expected state, not a failure: missing user keys are UNCONFIGURED —
+    // they must never surface as ERROR or trigger failure notifications.
+    status = "UNCONFIGURED";
+    lastError = `Waiting for your free API key(s): set them in Extensions. The provider will report ${dto.name}'s real health afterward.`;
   } else if (!adapter) {
     status = "ERROR";
     lastError = "No live adapter implementation is registered for this provider.";

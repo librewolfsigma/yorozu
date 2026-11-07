@@ -400,7 +400,7 @@ export function ProviderChips({ provider }: {
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-xs font-semibold text-muted-foreground">Source</span>
       <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold">
-        <span className={cn("h-1.5 w-1.5 rounded-full", provider.status === "ACTIVE" ? "bg-[#3BD47A]" : provider.status === "ERROR" ? "bg-[#EF5B6B]" : "bg-muted")} />
+        <span className={cn("h-1.5 w-1.5 rounded-full", provider.status === "ACTIVE" ? "bg-[#3BD47A]" : provider.status === "ERROR" ? "bg-[#EF5B6B]" : provider.status === "UNCONFIGURED" ? "bg-[#FFBE4A]" : "bg-muted")} />
         {provider.name}
         {provider.externalUrl && (
           <a href={provider.externalUrl} target="_blank" rel="noreferrer" aria-label={`Open ${provider.name} listing`} className="text-muted-foreground hover:text-foreground">

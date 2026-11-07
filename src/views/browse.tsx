@@ -1,15 +1,12 @@
 "use client";
 
-// Live browse — INFINITE SCROLL over a paged multi-provider feed.
-//
-// Every page pulls the next upstream page from every usable provider in the
-// category (round-robin interleaved, external-ref deduped) via /api/feed.
-// Nothing is stored locally: when a provider adds new items upstream, the
-// next page pull surfaces them here.
-//
-// TAXONOMY: Manga / Doujin / Manhwa are distinct categories; single booru
-// images (ILLUSTRATION) render with the dedicated Danbooru-style browser
-// instead of this grid; AV subcategory tabs stay distinct.
+// Live browse — Mihon/Aniyomi-style BROWSE screen (user directive: the client
+// UX mirrors Aniyomi — nsfw-only). Root /browse shows the two tabs:
+//   Sources    — every installed provider, one tap from its catalog
+//   Extensions — installed extensions + upstream extension repositories
+// A category route (/browse/AV etc.) opens the INFINITE multi-provider feed
+// instead; single booru images (ILLUSTRATION) get the dedicated Danbooru-style
+// browser. Nothing is stored locally anywhere.
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { PackageOpen, AlertTriangle, Puzzle, ChevronDown, ChevronRight, RefreshCw, Layers, Loader2 } from "lucide-react";
@@ -22,6 +19,8 @@ import { navigate } from "@/hooks/use-hash-route";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import BooruView from "@/views/booru";
+import SourcesView from "@/views/sources";
+import ExtensionsView from "@/views/extensions";
 
 interface FeedResponse {
   category: string;
@@ -34,60 +33,50 @@ interface FeedResponse {
 }
 
 export default function BrowseView({ category, query }: { category?: string; query: URLSearchParams }) {
-  // No category → the category index (also the mobile "Browse" landing).
-  if (!category) return <CategoryIndex />;
+  // No category → the Mihon/Aniyomi Browse screen (Sources | Extensions tabs).
+  if (!category) return <BrowseTabs initialTab={query.get("tab") === "extensions" ? 1 : 0} />;
   // Single booru images get their own Danbooru-style UI entirely.
   if (category === "ILLUSTRATION") return <BooruView tag={query.get("q") ?? ""} />;
   return <FeedBrowser category={category} kind={query.get("kind") ?? ""} />;
 }
 
-// ─── Category index ─────────────────────────────────────────────────────────
+// ─── Mihon-style Browse screen: Sources | Extensions ────────────────────────
 
-function CategoryIndex() {
+function BrowseTabs({ initialTab }: { initialTab: number }) {
+  const [tab, setTab] = useState(initialTab === 1 ? 1 : 0);
+  const tabs = [
+    { key: "sources", label: "Sources", icon: Puzzle },
+    { key: "extensions", label: "Extensions", icon: Layers },
+  ];
   return (
     <div className="pb-6">
       <h1 className="font-display text-3xl text-white">Browse</h1>
       <p className="mt-1 text-[13px] text-muted-foreground">
-        Every category, live from installed providers — infinite scroll, nothing stored locally.
+        Pick a source to browse it live, or manage extensions — like Aniyomi, but 18+ only.
       </p>
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {CATEGORIES.map((c) => (
+      <div className="mt-4 flex gap-1 border-b border-border" role="tablist" aria-label="Browse sections">
+        {tabs.map((t, i) => (
           <button
-            key={c.key}
-            onClick={() => navigate(`/browse/${c.key}`)}
-            className="group flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg press-scale"
-            style={{ ["--hub" as string]: c.hub }}
+            key={t.key}
+            role="tab"
+            aria-selected={tab === i}
+            onClick={() => setTab(i)}
+            className={cn(
+              "relative flex items-center gap-1.5 px-4 py-2.5 text-[13.5px] font-bold transition-colors",
+              tab === i ? "text-[#3DB4F2]" : "text-muted-foreground hover:text-foreground",
+            )}
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg hub-soft" style={{ color: c.hub }}>
-              <c.icon className="h-5 w-5" />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-[13.5px] font-bold">{c.label}</span>
-              <span className="block text-[11px] leading-snug text-muted-foreground">{categoryBlurb(c.key)}</span>
-            </span>
-            <ChevronRight className="ml-auto mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+            <t.icon className="h-4 w-4" />
+            {t.label}
+            {tab === i && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-[#3DB4F2]" />}
           </button>
         ))}
       </div>
+      <div className="mt-5" role="tabpanel">
+        {tab === 0 ? <SourcesView embedded /> : <ExtensionsView embedded />}
+      </div>
     </div>
   );
-}
-
-function categoryBlurb(key: string): string {
-  const blurbs: Record<string, string> = {
-    ANIME: "Streams · HentaiOcean, NSFW-API · AniList metadata",
-    MANGA: "Serialized manga · nhentai v2, MangaDex, MangaUpdates",
-    DOUJIN: "Doujinshi galleries · E-Hentai, WholesomeList, Sukebei",
-    MANHWA: "Webtoons · Manga18fx",
-    ILLUSTRATION: "Single booru images · e621, yande.re, Hypnohub",
-    GALLERY: "Curated image collections · e621 Pools",
-    AV: "AV / JAV · PMV (PMVHaven) · HMV (HMVmania + Iwara) · Hentai scenes",
-    GAME: "Visual novels & doujin games · VNDB, DLsite",
-    SCRIPT: "Userscripts & tools",
-    DATABASE: "Metadata databases directory",
-    MISC: "Guides & reference",
-  };
-  return blurbs[key] ?? "";
 }
 
 // ─── Infinite feed browser ──────────────────────────────────────────────────

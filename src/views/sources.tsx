@@ -30,7 +30,7 @@ interface ProviderDTO {
   availability: { watch: boolean; read: boolean; view: boolean };
 }
 
-export default function SourcesView() {
+export default function SourcesView({ embedded }: { embedded?: boolean } | undefined) {
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["providers-installed"],
     queryFn: () => api<{ installed: ProviderDTO[] }>("/api/providers"),
@@ -66,6 +66,7 @@ export default function SourcesView() {
 
   return (
     <div className="pb-6">
+      {!embedded && (
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl hub-soft" style={{ color: "#3DB4F2" }}>
           <Puzzle className="h-5 w-5" />
@@ -90,6 +91,29 @@ export default function SourcesView() {
           <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
         </Button>
       </div>
+      )}
+      {embedded && (
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <p className="text-[12.5px] text-muted-foreground">
+            {total} installed — tap a source to browse it live.
+          </p>
+          <div className="flex items-center gap-1.5">
+            <div className="relative w-36 sm:w-56">
+              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Filter sources…"
+                className="h-8 rounded-lg bg-card pl-8 text-[13px]"
+                aria-label="Filter installed sources"
+              />
+            </div>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Refresh health" onClick={() => void refetch()}>
+              <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {degraded > 0 && (
         <p className="mb-4 flex items-center gap-1.5 rounded-lg border border-[#FFBE4A]/30 bg-[#FFBE4A]/10 px-3 py-2 text-xs text-foreground/85">
@@ -130,7 +154,7 @@ export default function SourcesView() {
                     Aggregate feed <ChevronRight className="h-3 w-3" />
                   </a>
                 </div>
-                <div className="grid gap-2.5 sm:grid-cols-2">
+                <div className="space-y-2">
                   {list.map((p) => (
                     <SourceCard key={p.id} p={p} accent={meta.hub} />
                   ))}
@@ -141,7 +165,7 @@ export default function SourcesView() {
         </div>
       )}
 
-      <p className="mt-8 text-center text-[12.5px] text-muted-foreground">
+      <p className={cn("text-center text-[12.5px] text-muted-foreground", embedded && "mt-6 text-left")}>
         Install or configure more sources in{" "}
         <a href="#/extensions" className="font-bold text-[#3DB4F2] hover:underline">
           Extensions
@@ -157,7 +181,7 @@ function SourceCard({ p, accent }: { p: ProviderDTO; accent: string }) {
   return (
     <button
       onClick={() => navigate(`/source/${p.id}`)}
-      className="group flex items-start gap-3 rounded-xl border border-border bg-card p-3.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg press-scale"
+      className="group flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg press-scale"
       aria-label={`Open source ${p.name}`}
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg hub-soft" style={{ color: accent }}>
@@ -171,6 +195,7 @@ function SourceCard({ p, accent }: { p: ProviderDTO; accent: string }) {
               {videoKindLabel(p.videoKind)}
             </span>
           )}
+          <span className="rounded-full bg-[#EF5B6B]/15 px-1.5 py-0.5 text-[9.5px] font-bold text-[#FF8B96]">18+</span>
           {p.availability.watch && <Play className="h-3 w-3 text-[#3BD47A]" aria-label="watchable" />}
           {p.availability.read && <BookOpen className="h-3 w-3 text-[#3ED6B0]" aria-label="readable" />}
           {p.availability.view && <ImageIcon className="h-3 w-3 text-[#AE8BFF]" aria-label="viewable" />}
@@ -179,16 +204,17 @@ function SourceCard({ p, accent }: { p: ProviderDTO; accent: string }) {
           <span
             className={cn(
               "h-1.5 w-1.5 shrink-0 rounded-full",
-              p.configRequired ? "bg-[#FFBE4A]" : p.status === "ERROR" ? "bg-[#EF5B6B]" : p.status === "ACTIVE" ? "bg-[#3BD47A]" : "bg-muted-foreground/40",
+              p.configRequired || p.status === "UNCONFIGURED" ? "bg-[#FFBE4A]" : p.status === "ERROR" ? "bg-[#EF5B6B]" : p.status === "ACTIVE" ? "bg-[#3BD47A]" : "bg-muted-foreground/40",
             )}
           />
-          {p.configRequired ? "needs your API key" : p.status === "ERROR" ? "upstream error" : p.status === "ACTIVE" ? "live" : "disabled"}
+          {p.configRequired || p.status === "UNCONFIGURED" ? "needs your API key" : p.status === "ERROR" ? "upstream error" : p.status === "ACTIVE" ? "live" : "disabled"}
+          <span className="opacity-60">· {meta.label}</span>
         </span>
       </span>
-      {p.configRequired ? (
-        <KeyRound className="mt-1 h-3.5 w-3.5 shrink-0 text-[#FFBE4A]" />
+      {p.configRequired || p.status === "UNCONFIGURED" ? (
+        <KeyRound className="h-3.5 w-3.5 shrink-0 text-[#FFBE4A]" />
       ) : (
-        <ExternalLink className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-50 transition-opacity group-hover:opacity-100" />
       )}
     </button>
   );

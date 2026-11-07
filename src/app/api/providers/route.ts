@@ -3,20 +3,25 @@ import { getCurrentUser } from "@/lib/auth";
 import { handle, readJson, ApiError } from "@/lib/api-utils";
 import {
   configureProvider, healthCheck, installProvider, listProviders,
-  toggleProvider, uninstallProvider,
+  toggleProvider, toPublicProvider, uninstallProvider,
 } from "@/lib/providers/engine";
 
 // Extension manager — the registry is code (src/lib/providers/registry.ts);
 // the database only stores the user's install/config/health overlay.
+// SECURITY: responses NEVER include provider config (user API keys) —
+// every provider object passes through toPublicProvider().
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const url = new URL(req.nextUrl);
     if (url.searchParams.get("view") === "repository") {
       const { repository } = await listProviders();
-      return NextResponse.json({ repository });
+      return NextResponse.json({ repository: repository.map(toPublicProvider) });
     }
     const data = await listProviders();
-    return NextResponse.json(data);
+    return NextResponse.json({
+      installed: data.installed.map(toPublicProvider),
+      repository: data.repository.map(toPublicProvider),
+    });
   });
 }
 
