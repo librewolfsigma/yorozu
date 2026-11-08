@@ -140,7 +140,7 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-export default function ExtensionsView({ embedded }: { embedded?: boolean } | undefined) {
+export default function ExtensionsView({ embedded }: { embedded?: boolean }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [healthBusy, setHealthBusy] = useState<string | null>(null);

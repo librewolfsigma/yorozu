@@ -375,7 +375,7 @@ export async function discoverCategory(category: string, kind?: string) {
       try {
         if (!adapter?.popular) throw new ApiError(501, `${p.name} exposes no popular listing (search-only source)`);
         assertUsable(p);
-        const items = await cached("rails", `${p.id}:1:${kind ?? ""}`, TTL.RAILS, () => adapter.popular!({ page: 1, kind }));
+        const items = await cached("rails", `${p.id}:1:${kind ?? ""}`, TTL.RAILS, () => adapter.popular!({ page: 1, kind, config: p.config }));
         rails.push({
           providerId: p.id,
           providerName: p.name,
@@ -394,6 +394,26 @@ export async function discoverCategory(category: string, kind?: string) {
     }),
   );
   return { category, kind: kind ?? null, rails };
+}
+
+/**
+ * Round-robin interleave of provider item queues (pure, unit-tested):
+ * every source gets fair representation at every depth; external refs are
+ * deduped on first sight; output capped at 120 items per request.
+ */
+export function interleaveRoundRobin(queues: WorkDTO[][], cap = 120): WorkDTO[] {
+  const qs = queues.map((q) => [...q]);
+  const merged: WorkDTO[] = [];
+  const seen = new Set<string>();
+  for (let depth = 0; qs.some((qq) => qq.length > 0) && merged.length < cap; depth++) {
+    for (const qq of qs) {
+      const item = qq.shift();
+      if (!item || seen.has(item.ref)) continue;
+      seen.add(item.ref);
+      merged.push(item);
+    }
+  }
+  return merged;
 }
 
 /**
@@ -436,7 +456,7 @@ export async function feedCategory(opts: {
             return adapter.search(q, { page, ...providerOpts(p) });
           }
           if (!adapter.popular) throw new ApiError(501, "source exposes no popular listing (search-only — use search)");
-          return adapter.popular({ page, kind: opts.kind });
+          return adapter.popular({ page, kind: opts.kind, config: p.config });
         };
         const raw = await cached("feed", `${p.id}:${q}:${page}:${opts.kind ?? ""}`, TTL.RAILS, fetcher);
         const items = dedupeByRef(
@@ -454,16 +474,7 @@ export async function feedCategory(opts: {
 
   // round-robin interleave — every source gets fair representation on every page
   const queues = perProvider.filter((s) => !s.error).map((s) => [...s.items].sort((a, b) => b.popularity - a.popularity));
-  const merged: WorkDTO[] = [];
-  const seen = new Set<string>();
-  for (let depth = 0; queues.some((qq) => qq.length > 0) && merged.length < 120; depth++) {
-    for (const qq of queues) {
-      const item = qq.shift();
-      if (!item || seen.has(item.ref)) continue;
-      seen.add(item.ref);
-      merged.push(item);
-    }
-  }
+  const merged = interleaveRoundRobin(queues);
 
   const liveCount = perProvider.filter((s) => !s.error && s.count > 0).length;
   return {
@@ -531,7 +542,7 @@ export async function getWork(providerId: string, externalId: string, opts?: { f
   // "Popular on <provider>" rail (replaces the old local recommendations table)
   let popular: WorkDTO[] = [];
   if (adapter?.popular) {
-    popular = await cached("rails", `${def.id}:1`, TTL.RAILS, () => adapter.popular!({ page: 1 }))
+    popular = await cached("rails", `${def.id}:1`, TTL.RAILS, () => adapter.popular!({ page: 1, config: dto.config }))
       .then((items) => dedupeByRef(items.slice(0, 12).map(mkDTO)).filter((w) => w.ref !== work!.ref))
       .catch(() => []);
   }
@@ -579,7 +590,7 @@ export async function providerBrowse(opts: { id: string; q?: string; page?: numb
       return adapter.search(q, { page, ...providerOpts(dto) });
     }
     if (!adapter.popular) throw new ApiError(501, `${def.name} exposes no popular listing — use search`);
-    return adapter.popular({ page });
+    return adapter.popular({ page, config: dto.config });
   };
   try {
     const raw = await cached("source", `${def.id}:${q}:${page}`, TTL.RAILS, fetcher);

@@ -73,7 +73,7 @@ export interface LiveAdapter {
    * `kind` carries the AV subcategory the rail is being built for
    * (JAV | PMV | HMV | …) so one multi-content provider can tune its rail.
    */
-  popular?(opts?: { page?: number; kind?: string }): Promise<LiveSearchItem[]>;
+  popular?(opts?: { page?: number; kind?: string; config?: Record<string, string> }): Promise<LiveSearchItem[]>;
   /** Full details for one external item. */
   details?(externalId: string, opts?: SearchOpts): Promise<LiveSearchItem | null>;
   /** Materializable content units (chapters/pages/episodes/images).

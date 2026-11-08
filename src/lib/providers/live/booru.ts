@@ -135,7 +135,7 @@ export const e621Adapter: LiveAdapter = {
       images: [
         {
           url: p.file.url,
-          thumbUrl: imageOrPreview(p.sample?.url, p.preview.url),
+          thumbUrl: imageOrPreview(p.sample?.url, p.preview.url) ?? undefined,
           width: p.file.width,
           height: p.file.height,
           tags: [...(p.tags?.artist ?? []), ...(p.tags?.general ?? []).slice(0, 20)],

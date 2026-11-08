@@ -30,7 +30,7 @@ interface ProviderDTO {
   availability: { watch: boolean; read: boolean; view: boolean };
 }
 
-export default function SourcesView({ embedded }: { embedded?: boolean } | undefined) {
+export default function SourcesView({ embedded }: { embedded?: boolean }) {
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["providers-installed"],
     queryFn: () => api<{ installed: ProviderDTO[] }>("/api/providers"),
