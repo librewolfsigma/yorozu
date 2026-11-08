@@ -60,6 +60,15 @@ is confirmed).
   collection; payload logic for those chains is harness-verified.
 - Iwara/HMVmania have no keyless upstream search (re-verified 2026-11);
   their extensions refuse/return-empty honestly by design.
+- ~~Passwordless server mode blocks hosted deployments~~ **Resolved 2026-11-08
+  (session E):** upstream's privileged guards ignored the operator
+  `accessAllowlist` and denied origin-less loopback (proxy-hop) writes — the
+  wizard's Launch Seanime 403'd. Fixed as fork commits `43f8ca1d` + `cc774bb1`
+  with 13 regression subtests; differential HTTP proof (preview origin passes,
+  evil origin 403) and full browser E2E (wizard → 200 → main app) recorded in
+  AUDIT §0c. The passwordless boundary stays honest: CSRF is still impossible
+  (browsers always send Origin on cross-site writes), LAN-private clients keep
+  upstream behavior, hardened/strict modes untouched.
 
 ---
 

@@ -40,6 +40,19 @@ checks in `todo.md`.
 | Playback chain | **BLOCKED** (unchanged) | Needs real AniList login — sandbox server runs with simulated token + empty collection |
 | Fork CI gates | **NOT IMPLEMENTED** | Session D leftover: go vet/build/test + web build workflow on the fork |
 
+## 0c. Pivot audit — session E (2026-11-08): the 403 root cause + fork-owned security fix
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| User-reported wizard 403 (`this action requires either a server password or a trusted local origin`) | **ROOT-CAUSED** | Server log: `POST /api/v1/start status=403` ×3 at 18:53. Two upstream incoherencies in `internal/handlers/local_security.go` |
+| Fix 1: allowlisted origin trusted for privileged actions | **REAL (fork commit `43f8ca1d`, pushed)** | Upstream let `server.accessAllowlist` cover only the passive API/events boundary, never the privileged guards. Fork adds `isTrustedRequestWithAllowlist` + `isStrictLocalBoundarySatisfied`, threaded through all 8 privileged guards + 4 strict guards. `test:` full handlers suite green, 7 new subtests |
+| Fix 2: origin-less loopback (proxy-hop) requests trusted in default mode | **REAL (fork commit `cc774bb1`, pushed)** | Site proxy terminates the browser boundary locally (strips Origin) — upstream guards then denied every privileged write. Fork grants trust to origin-less requests from loopback clients with no untrusted forwarded hop; browsers always send Origin on cross-site writes so CSRF is unaffected; LAN-private clients keep upstream require-origin behavior (upstream `rejects missing origin` tests still green); hardened/strict unaffected. `test:` suite green, 6 new subtests |
+| Pre-existing test-platform bug fixed | **REAL** | `TestUsesPrivilegedCommandSettings` hardcoded macOS VLC/qBittorrent paths → failed on Linux; now uses `defaultVLCPaths()[0]` / `defaultQBittorrentPaths()[0]` |
+| Differential proof (live binary, real HTTP) | **REAL** | Direct-to-Go `POST /api/v1/extensions/external/install-repository` (invalid URI, `install:false`, no state change): preview origin → guard passes → 500 `failed to fetch extension manifest` (validation ran); `https://evil.example` → **403 guard error** (CSRF blocked); origin-less loopback → guard passes → 500 |
+| Browser E2E — full setup journey | **REAL** | `e2e:` agent-browser through Caddy (same chain as preview): fresh wizard → library path `/home/z/my-project/download` → player/qbittorrent/debrid steps → features step (user's exact screenshot state) → **Launch Seanime → `POST /api/v1/start status=200`** (server log, 19:37 vs the 18:53 403s) → AniList login gate → skip → main app: Home/Schedule/Manga/My lists/Discover + trending carousels. Screenshots `upload/e2e-anilist-gate.png`, `upload/e2e-main-ui.png` |
+| Content flow through full preview chain | **REAL** | `POST /api/v1/manga/search` nhentai via Caddy → Next proxy → Go → live results (titles + covers) |
+| Deployment self-healing | **REAL** | Platform wipes `node_modules` + kills processes between sessions (project files persist). Cron watchdog job `515740` (every 5 min) re-installs deps and respawns Go (:43211) + Next (:3000) with single-instance probes |
+
 ---
 
 ## 1. Architecture

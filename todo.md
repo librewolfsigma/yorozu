@@ -99,11 +99,67 @@ and implement Yozora's goals on it. See roadmap §0.
 
 ### Session D leftovers (next session, in order)
 
-- [ ] CI gates for the fork (adapt WasewaseX/master-ci to Go): go vet + go
-  build + go test (+ web build job); wire into GitHub Actions
-- [ ] Re-verify the wizard→library flow in a fresh browser profile after
-  config change (setup wizard currently shows on first load — expected for a
-  fresh data dir)
+- [x] CI gates for the fork (adapt WasewaseX/master-ci to Go): go vet + go
+  build + go test (+ web build job); wire into GitHub Actions — commit
+  `17d0f8c1` pushed, `.github/workflows/ci.yml` present in fork
+- [x] Re-verify the wizard→library flow in a fresh browser profile after
+  config change — done in session E, see below
+
+### Session E (2026-11-08): the 403 "requires server password or trusted local origin" — ROOT-CAUSED AND FIXED IN THE FORK
+
+User hit the wizard's Launch Seanime → `403 this action requires either a
+server password or a trusted local origin`. Two upstream incoherencies, both
+now owned as fork commits (pushed):
+
+- [x] **Root cause 1 — allowlist incoherence** (`43f8ca1d`): upstream's
+  `server.accessAllowlist` is documented as "additional remote hosts/origins
+  allowed through the passwordless API/events boundary" but the PRIVILEGED
+  guards (settings mutations, extension management, local execution, media
+  player/torrent/mediastream) never consulted it — an explicitly allowlisted
+  deployment origin could read the API yet fail every privileged write.
+  Fix: `isTrustedRequestWithAllowlist` + `isStrictLocalBoundarySatisfied`
+  threaded through all eight privileged guards and the strict_* guards.
+  `test:` full handlers suite green; 7 new regression subtests
+- [x] **Root cause 2 — origin-less proxy-hop denial** (`cc774bb1`): the site
+  proxy terminates the browser boundary locally and strips Origin/Referer
+  (by design), but upstream privileged guards denied origin-less requests in
+  passwordless mode even when the TCP client is the loopback proxy itself —
+  while the passive boundary already allowed such requests for reads.
+  Fix: `isTrustedRequest` (default mode) grants trust to origin-less requests
+  from the local machine itself (loopback, no untrusted forwarded hop);
+  LAN-private clients KEEP the upstream require-origin behavior (upstream
+  tests `rejects missing origin` still green); hardened/strict unaffected;
+  requests carrying Origin metadata unaffected.
+  `test:` full handlers suite green; 6 new regression subtests; pre-existing
+  platform bug fixed (`TestUsesPrivilegedCommandSettings` hardcoded macOS
+  paths, failed on Linux)
+- [x] **Differential proof (live server, real HTTP)**: direct-to-Go
+  `POST /api/v1/extensions/external/install-repository` (invalid URI, no
+  install) — preview origin → guard passes → 500 manifest-validation error;
+  evil origin → 403 guard error; origin-less loopback → guard passes → 500.
+  CSRF boundary intact.
+- [x] **Browser E2E, full journey** (`e2e:` agent-browser via Caddy gateway —
+  same chain as the preview URL): fresh wizard → library path filled →
+  player/torrent/debrid steps → features step (exact screenshot state) →
+  **Launch Seanime → server log `POST /api/v1/start status=200`** (was 403
+  at 18:53, 200 at 19:37) → AniList login gate (honest: needs a real token)
+  → skip → **main app UI**: Home/Schedule/Manga/My lists/Discover nav,
+  trending carousels render. Screenshots: `upload/e2e-anilist-gate.png`,
+  `upload/e2e-main-ui.png`
+- [x] **Content flow through the full preview chain**: nhentai search via
+  `POST /api/v1/manga/search` (Caddy → Next proxy → Go) returns live results
+- [x] **Sandbox volatility characterized + mitigated**: between tool sessions
+  the platform wipes `node_modules` and kills processes (project files
+  persist — fork commits/binary/data survive). Platform-level watchdog cron
+  (job `515740`, every 5 min) re-installs deps and respawns Go + Next as
+  needed — self-healing deployment
+- [!] Real playback chain (episode-list → episode-source → player; manga
+  chapters → pages) — still blocked on a real AniList login (owner action);
+  unchanged from session D
+- [ ] Owner decision: retire the legacy Next.js app (`yorozu`) once seanime
+  track is confirmed working end-to-end on the owner's machine (note: `yorozu`
+  is now the HOSTING SHELL for the preview site — retirement needs a new plan
+  for that role)
 
 ---
 
