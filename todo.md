@@ -50,6 +50,36 @@ and implement Yozora's goals on it. See roadmap §0.
 - [x] Install-simulation + 40/40 harness green after the string-throw change;
   note: raw.githubusercontent CDN served stale payloads for ~4 min after push
   (reinstall must wait for CDN freshness — documented pitfall)
+- [x] **Website directive fulfilled (session D, 2026-11-08):** product serves at
+  the preview URL — `proxy.ts` rewrites all product routes to the Go server
+  (`127.0.0.1:43211`), binary spawned as detached child of the dev server by
+  `instrumentation.ts` keepalive, `bridge-boot` API available for on-demand boot;
+  WS `/events` rides the Caddy gateway (`XTransformPort=43211`, fork commit
+  `33beaaf9`) — `e2e:` agent-browser on the preview origin: UI rendered (title
+  "Seanime"), WS opened, server status received (correct dataDir), wizard steps
+  on click, zero page errors
+- [x] **Sandbox-recycle recovery (session D):** recycle wiped everything outside
+  `my-project` (binary, Go, data dir) → rebuilt end-to-end with all artifacts
+  persisted INSIDE the project (`.toolchain/go` 1.27.3 + caches,
+  `vendor/yozora` clone, `.yozora/runtime` binary 79.9 MB, `.yozora/data`);
+  fixed stale-keepalive boot race by versioning the boot globals (V2) —
+  `probe:` bridge-boot `{up:true,binExists:true}`; go-root 200; via-proxy 200
+- [x] Extension pack reinstalled through the LIVE server API
+  (`POST /api/v1/extensions/external/install-repository` with raw
+  `repo.json` URL — API takes the direct manifest URL, not the repo slug):
+  **9 extensions loaded** (5 providers + 3 custom-source browse variants +
+  local-manga) — `probe:` extensions/list
+- [x] CustomSource evaluation done in session C: `yozora-{nhentai,hmvmania,
+  pmvhaven}-cs` custom-source extensions exist in the pack and load in the
+  real runtime — `probe:` extensions/list shows all three `custom-source` ids
+- [x] Real searches re-verified against the rebuilt binary: hentaiocean 20
+  results · nhentai 24 results · iwara honest refusal (full ported message) —
+  `probe:` `/api/v1/onlinestream/search`, `/api/v1/manga/search`; note:
+  search bodies use `provider` key; passwordless privileged endpoints require
+  a parseable trusted Origin header (localhost Origin accepted)
+- [x] Recycle-proof provisioning committed: `scripts/provision-yozora-runtime.sh`
+  (fast path = ensure binary; `--force` = rebuild web + Go) + `.gitignore`
+  entries for `.yozora/ .toolchain/ vendor/`
 - [!] Real playback chain (episode-list → episode-source → player; manga
   chapters → pages) — **blocked in sandbox: server runs with SIMULATED AniList
   token (no account) and empty collection, and episode endpoints require a
@@ -57,16 +87,23 @@ and implement Yozora's goals on it. See roadmap §0.
   harness-verified (goja-faithful); needs owner run with a real AniList login.
 - [ ] Move verification harness (`~/work/ext-harness`: harness.ts, install-sim.ts,
   icons.ts) into `yozora-extensions` repo + CI workflow to run it on every push
-- [ ] CustomSource evaluation: map HMV/PMV browse feeds to a custom-source
-  extension (browse-first UX inside seanime) — needs `internal/customsource`
-  study + real-binary verification (blocked on Go, same as above)
 - [ ] NSFW-API self-host as a user-config extension (manifest `userConfig`
   baseUrl field) — needs a reachable self-hosted instance to verify against
 - [ ] Fork sync policy: periodic `gh repo sync librewolfsigma/yozora` (or API
-  merge-upstream); keep fork pristine (no divergent commits) until custom
-  branding is actually needed
+  merge-upstream); fork now carries **one** infra commit (`33beaaf9`, gateway
+  WS — hosting requirement) until custom branding is actually needed
 - [?] Owner decision: retire the legacy Next.js app (`yorozu`) once seanime
-  track is confirmed working end-to-end on the owner's machine
+  track is confirmed working end-to-end on the owner's machine (note: `yorozu`
+  is now the HOSTING SHELL for the preview site — retirement needs a new plan
+  for that role)
+
+### Session D leftovers (next session, in order)
+
+- [ ] CI gates for the fork (adapt WasewaseX/master-ci to Go): go vet + go
+  build + go test (+ web build job); wire into GitHub Actions
+- [ ] Re-verify the wizard→library flow in a fresh browser profile after
+  config change (setup wizard currently shows on first load — expected for a
+  fresh data dir)
 
 ---
 

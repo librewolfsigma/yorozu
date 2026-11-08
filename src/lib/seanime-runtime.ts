@@ -23,16 +23,17 @@ import path from "path";
 
 const SEANIME_HOST = "127.0.0.1";
 const SEANIME_PORT = 43211;
-const RUNTIME_DIR = "/home/z/yozora-runtime";
-const DATA_DIR = "/home/z/yozora-data";
+// Persisted inside the project so the binary + data survive sandbox recycles.
+const RUNTIME_DIR = "/home/z/my-project/.yozora/runtime";
+const DATA_DIR = "/home/z/my-project/.yozora/data";
 export const SEANIME_BIN = path.join(RUNTIME_DIR, "seanime-server");
 export const SEANIME_BASE_URL = `http://${SEANIME_HOST}:${SEANIME_PORT}`;
 
 declare global {
   // eslint-disable-next-line no-var
-  var __yozoraSeanimeBooting: Promise<boolean> | null;
+  var __yozoraSeanimeBootingV2: Promise<boolean> | null;
   // eslint-disable-next-line no-var
-  var __yozoraSeanimeKeepalive: NodeJS.Timeout | null;
+  var __yozoraSeanimeKeepaliveV2: NodeJS.Timeout | null;
 }
 
 function probePort(host: string, port: number, timeoutMs = 1500): Promise<boolean> {
@@ -82,9 +83,9 @@ function spawnSeanime(): ChildProcess | null {
 export async function ensureSeanimeServer(): Promise<boolean> {
   if (await isSeanimeUp()) return true;
 
-  if (globalThis.__yozoraSeanimeBooting) return globalThis.__yozoraSeanimeBooting;
+  if (globalThis.__yozoraSeanimeBootingV2) return globalThis.__yozoraSeanimeBootingV2;
 
-  globalThis.__yozoraSeanimeBooting = (async () => {
+  globalThis.__yozoraSeanimeBootingV2 = (async () => {
     try {
       const child = spawnSeanime();
       if (!child) return false;
@@ -96,21 +97,21 @@ export async function ensureSeanimeServer(): Promise<boolean> {
       }
       return false;
     } finally {
-      globalThis.__yozoraSeanimeBooting = null;
+      globalThis.__yozoraSeanimeBootingV2 = null;
     }
   })();
 
-  return globalThis.__yozoraSeanimeBooting;
+  return globalThis.__yozoraSeanimeBootingV2;
 }
 
 /** Register a periodic keepalive inside the Next.js server process. */
 export function registerSeanimeKeepalive(intervalMs = 30_000): void {
-  if (globalThis.__yozoraSeanimeKeepalive) return;
-  globalThis.__yozoraSeanimeKeepalive = setInterval(() => {
+  if (globalThis.__yozoraSeanimeKeepaliveV2) return;
+  globalThis.__yozoraSeanimeKeepaliveV2 = setInterval(() => {
     void ensureSeanimeServer().catch((e) =>
       console.error("[yozora-runtime] keepalive error", e),
     );
   }, intervalMs);
   // Do not hold the event loop open because of the keepalive.
-  globalThis.__yozoraSeanimeKeepalive.unref?.();
+  globalThis.__yozoraSeanimeKeepaliveV2.unref?.();
 }

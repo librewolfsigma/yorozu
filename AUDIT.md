@@ -26,6 +26,20 @@ checks in `todo.md`.
 | HMVmania keyless search | **NOT IMPLEMENTED (by upstream)** | WP search does not index video posts — extension returns `[]` honestly |
 | PMVHaven keyless search | **PARTIAL** | Keyless = browse-by-tag (first query word); text search is key-gated upstream (`/api/search` → 401) |
 
+## 0b. Pivot audit — session D (2026-11-08): hosting + recycle recovery
+
+| Item | Status | Evidence |
+|---|---|---|
+| Product served at the preview URL | **REAL** | `e2e:` agent-browser on `https://preview-chat-79614d8d-…space-z.ai/`: page renders (title "Seanime"), zero page errors; `proxy.ts` rewrite header observed (`x-middleware-rewrite: http://127.0.0.1:43211/`) before boot; after boot both `:43211` root and proxied `:3000/` → HTTP 200 |
+| Gateway WebSocket (`/events`) | **REAL** | Browser console: `WebSocket connection opened` on the preview origin; server status event received with correct dataDir; fork commit `33beaaf9` attaches `XTransformPort=43211` only for `*.space-z.ai` hosts |
+| Sandbox-recycle rebuild | **REAL** | Recycle wiped `/home/z/yozora-runtime`, `/home/z/yozora-data`, Go toolchain → full rebuild: Go 1.27.3 tarball, fork clone to `vendor/yozora`, `npm ci` 827 pkgs, `rsbuild build` (11.3 MB), `go build` CGO_ENABLED=0 → 79.9 MB binary at `my-project/.yozora/runtime/` (all persisted) |
+| Boot race fix | **REAL** | Stale pre-edit instrumentation keepalive shared the old boot-promise global → route returned `up:false` without spawning; fixed by versioning globals (`__yozoraSeanimeBootingV2`); `probe:` bridge-boot `{up:true,probed:true,binExists:true}` |
+| Config (passwordless + origin allowlist) | **REAL** | `.yozora/data/config.toml`: `password=""`, `accessAllowlist=["*.space-z.ai", preview-origin]`, `trustedProxies=["127.0.0.1"]`, `externalURL=preview`; server accepted it (boot log clean) |
+| Extension pack reinstalled on rebuilt server | **REAL** | `POST /api/v1/extensions/external/install-repository` (raw `repo.json` URL; API wants the direct manifest URL, not a repo slug) → 9 extensions listed: 5 providers + 3 custom-source + local-manga |
+| Real searches on rebuilt binary | **REAL** | `/api/v1/onlinestream/search` hentaiocean → 20 results; iwara → honest refusal (full ported message); `/api/v1/manga/search` nhentai → 24 results. Note: body key is `provider`; privileged endpoints need a parseable trusted `Origin` header in passwordless mode |
+| Playback chain | **BLOCKED** (unchanged) | Needs real AniList login — sandbox server runs with simulated token + empty collection |
+| Fork CI gates | **NOT IMPLEMENTED** | Session D leftover: go vet/build/test + web build workflow on the fork |
+
 ---
 
 ## 1. Architecture

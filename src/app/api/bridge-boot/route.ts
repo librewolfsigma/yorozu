@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { ensureSeanimeServer, isSeanimeUp, SEANIME_BASE_URL } from "@/lib/seanime-runtime";
+import fs from "fs";
+import { ensureSeanimeServer, isSeanimeUp, SEANIME_BASE_URL, SEANIME_BIN } from "@/lib/seanime-runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -13,5 +14,7 @@ export async function GET() {
     up: ok,
     probed: await isSeanimeUp(),
     baseUrl: SEANIME_BASE_URL,
+    bin: SEANIME_BIN,
+    binExists: fs.existsSync(SEANIME_BIN),
   });
 }

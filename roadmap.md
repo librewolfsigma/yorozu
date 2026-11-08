@@ -23,10 +23,12 @@ is confirmed).
 
 | Piece | Where | State |
 |---|---|---|
-| App base (fork) | [`librewolfsigma/yozora`](https://github.com/librewolfsigma/yozora) — fork of `5rahim/seanime`, full history, GPL-3.0 preserved | ✅ created 2026-11-08; pristine (no divergent commits — merges from upstream stay trivial) |
+| App base (fork) | [`librewolfsigma/yozora`](https://github.com/librewolfsigma/yozora) — fork of `5rahim/seanime`, full history, GPL-3.0 preserved | ✅ created 2026-11-08; **1 divergent infra commit** (`33beaaf9` gateway-routed WebSocket — required for the hosted site; upstream merges stay trivial) |
+| Website (preview URL) | Next.js `proxy.ts` rewrites every product route → Go server on `127.0.0.1:43211`; binary spawned as a detached child of the dev server by `instrumentation.ts` keepalive; WS `/events` rides the Caddy gateway via `XTransformPort` | ✅ **LIVE 2026-11-08 (session D)** — browser-verified on the preview origin: UI rendered, WS open, wizard interactive, searches real |
 | Provider pack | [`librewolfsigma/yozora-extensions`](https://github.com/librewolfsigma/yozora-extensions) — seanime extension repository (`marketplace.json` + `repo.json` + 5 payloads) | ✅ published, install-sim all green |
 | Legacy Next.js client | `librewolfsigma/yorozu` (this repo) + `yozora-legacy` (stale mirror, renamed) | maintenance mode |
 | Verification harness | `~/work/ext-harness` (goja-faithful shim + live-upstream suites + install simulation) | to be moved into the extensions repo |
+| Recycle-proof runtime | `my-project/.toolchain` (Go 1.27.3 + caches) · `my-project/vendor/yozora` (fork clone) · `my-project/.yozora/{runtime,data}` (binary + SQLite/settings/extensions) · `scripts/provision-yozora-runtime.sh` | ✅ session D — rebuild reproducible inside the project; data survives recycles |
 
 **Why this satisfies standing directives faster:**
 

@@ -61,3 +61,8 @@ tool-results/
 
 # user-uploaded scratch files
 upload/
+
+# Yozora runtime (fork toolchain + built product + data)
+.yozora/
+.toolchain/
+vendor/
