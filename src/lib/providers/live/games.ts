@@ -8,7 +8,7 @@
 // Both are metadata providers: downloads happen on the official pages.
 
 import { matchAll, liveJson, liveText, PLATFORM_UA, stripTags } from "./http";
-import type { LiveAdapter, LiveSearchItem, LiveUnits } from "./types";
+import type { LiveAdapter, LiveSearchItem } from "./types";
 
 // ─── VNDB (visual novels) ───
 // https://api.vndb.org/kana — public, documented, no auth for reads.

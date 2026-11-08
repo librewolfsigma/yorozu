@@ -13,7 +13,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search, Bell, MoonStar, Home, Library, Layers, History, Compass, MoreHorizontal,
   Puzzle, User, Settings, ShieldCheck, FileCode2, Database,
-  ChevronDown, Sparkles, Image as ImageIcon, Images, Video, Tv, BookOpen, Heart,
+  ChevronDown, ChevronRight, Sparkles, Image as ImageIcon, Images, Video, Tv, BookOpen, Heart,
   ScrollText, Gamepad2, X,
 } from "lucide-react";
 import { useAuth } from "@/components/providers";
@@ -87,12 +87,12 @@ function SideItem({ href, icon: Icon, label, active, badge }: {
       className={cn(
         "group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] font-semibold transition-colors",
         active
-          ? "bg-white/[0.07] text-[#3DB4F2]"
+          ? "bg-white/[0.07] text-primary"
           : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
       )}
       aria-current={active ? "page" : undefined}
     >
-      <Icon className={cn("h-[18px] w-[18px]", active ? "text-[#3DB4F2]" : "text-muted-foreground group-hover:text-foreground")} />
+      <Icon className={cn("h-[18px] w-[18px]", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
       {label}
       {badge && (
         <span className="ml-auto rounded-full bg-white/5 px-1.5 py-0.5 text-[9.5px] font-bold text-muted-foreground">{badge}</span>
@@ -115,7 +115,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { route } = useHashRoute();
   const { user } = useAuth();
   const [searchOpen, setSearchOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -145,7 +144,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen">
       {/* ── Desktop sidebar (Mihon/Aniyomi navigation drawer) ── */}
       <aside
-        className="fixed inset-y-0 left-0 z-40 hidden w-[232px] flex-col border-r border-border bg-[#0D1626]/95 backdrop-blur lg:flex"
+        className="fixed inset-y-0 left-0 z-40 hidden w-[232px] flex-col border-r border-border bg-[#1C1D22]/95 lg:flex"
         aria-label="Sidebar"
       >
         <a href="#/" className="flex items-center gap-2 px-4 pb-3 pt-5 press-scale" aria-label="Yozora home">
@@ -192,7 +191,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* ── Top bar ── */}
-      <header className="fixed inset-x-0 top-0 z-30 border-b border-border bg-[#0B1622]/90 backdrop-blur-lg lg:left-[232px]">
+      <header className="fixed inset-x-0 top-0 z-30 border-b border-border bg-background/90 backdrop-blur-lg lg:left-[232px]">
         {/* mobile: screen title · desktop: search + actions */}
         <div className="flex h-[52px] items-center gap-2 px-4 lg:h-[56px] lg:px-6">
           <a href="#/" className="flex items-center gap-2 lg:hidden" aria-label="Yozora home">
@@ -237,7 +236,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               className="h-10 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
               aria-label="Search query"
             />
-            <Button type="submit" size="sm" className="rounded-lg bg-[#3DB4F2] font-bold text-[#04121E] hover:bg-[#1E97D8] hover:text-white">
+            <Button type="submit" size="sm" className="rounded-lg bg-primary font-bold text-primary-foreground hover:bg-[#4648B8] hover:text-white">
               Go
             </Button>
           </form>
@@ -285,7 +284,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       {/* ── Mobile bottom tabbar — Aniyomi structure ── */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 flex h-14 items-stretch justify-around border-t border-border bg-[#0D1626]/95 backdrop-blur-lg lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 flex h-14 items-stretch justify-around border-t border-border bg-[#1C1D22]/95 backdrop-blur-lg lg:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         aria-label="Mobile"
       >
@@ -304,63 +303,92 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 "flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold",
                 active ? "hub-text" : "text-muted-foreground"
               )}
-              style={{ ["--hub" as string]: "#3DB4F2" }}
+              style={{ ["--hub" as string]: "var(--primary)" }}
             >
               <item.icon className="h-5 w-5" />
               {item.label}
             </a>
           );
         })}
-        <button
-          onClick={() => setMoreOpen(true)}
+        <a
+          href="#/more"
           className={cn(
             "flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold",
-            moreOpen ? "hub-text" : "text-muted-foreground"
+            isActive(route.path, "/more") || isActive(route.path, "/profile") || isActive(route.path, "/settings") || isActive(route.path, "/collections") || isActive(route.path, "/scripts") || isActive(route.path, "/databases") || isActive(route.path, "/policy")
+              ? "hub-text"
+              : "text-muted-foreground",
           )}
-          style={{ ["--hub" as string]: "#3DB4F2" }}
-          aria-label="More menu"
+          style={{ ["--hub" as string]: "var(--primary)" }}
+          aria-label="More"
         >
           <MoreHorizontal className="h-5 w-5" />
           More
-        </button>
+        </a>
       </nav>
+    </div>
+  );
+}
 
-      {/* ── Mobile More sheet (Aniyomi "More" tab) ── */}
-      <Dialog open={moreOpen} onOpenChange={setMoreOpen}>
-        <DialogContent className="max-w-xs rounded-2xl border-border bg-card p-2" aria-describedby={undefined}>
-          <DialogHeader className="sr-only">
-            <DialogTitle>More</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-3 gap-1.5 p-1">
-            {[
-              { label: "Profile", icon: User, path: "/profile" },
-              { label: "Search", icon: Search, path: null },
-              { label: "Collections", icon: Layers, path: "/collections" },
-              { label: "Extensions", icon: Puzzle, path: "/extensions" },
-              { label: "Scripts", icon: FileCode2, path: "/scripts" },
-              { label: "Databases", icon: Database, path: "/databases" },
-              { label: "Settings", icon: Settings, path: "/settings" },
-              { label: "Policy", icon: ShieldCheck, path: "/policy" },
-            ].map((m) => (
-              <button
+// ─── More screen (Mihon "More" tab — settings-style list) ───────────────────
+
+const MORE_SECTIONS: { label: string; items: { label: string; icon: React.ComponentType<{ className?: string }>; href: string; desc: string }[] }[] = [
+  {
+    label: "Library & tracking",
+    items: [
+      { label: "Collections", icon: Layers, href: "/collections", desc: "Your own curated sets across every source" },
+      { label: "Profile", icon: User, href: "/profile", desc: "Local profile — this device, no account" },
+    ],
+  },
+  {
+    label: "Sources",
+    items: [
+      { label: "Extensions", icon: Puzzle, href: "/extensions", desc: "Install, configure and health-check providers" },
+      { label: "Scripts", icon: FileCode2, href: "/scripts", desc: "Userscripts & tools directory" },
+      { label: "Databases", icon: Database, href: "/databases", desc: "Metadata database directory" },
+    ],
+  },
+  {
+    label: "About",
+    items: [
+      { label: "Settings", icon: Settings, href: "/settings", desc: "Playback, reader and content preferences" },
+      { label: "Content policy", icon: ShieldCheck, href: "/policy", desc: "What Yozora allows — and what it never hosts" },
+    ],
+  },
+];
+
+export function MoreView() {
+  return (
+    <div className="pb-6">
+      <h1 className="font-display text-3xl text-white">More</h1>
+      <p className="mt-1 text-[13px] text-muted-foreground">
+        Everything that isn't browsing — the Mihon "More" screen.
+      </p>
+      {MORE_SECTIONS.map((s) => (
+        <section key={s.label} className="mt-6">
+          <p className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">{s.label}</p>
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            {s.items.map((m, i) => (
+              <a
                 key={m.label}
-                onClick={() => {
-                  setMoreOpen(false);
-                  if (m.path) navigate(m.path);
-                  else {
-                    setSearchOpen(true);
-                    setTimeout(() => inputRef.current?.focus(), 60);
-                  }
-                }}
-                className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-white/[0.03] p-3 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                href={`#${m.href}`}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.04]",
+                  i > 0 && "border-t border-border",
+                )}
               >
-                <m.icon className="h-4.5 w-4.5" />
-                {m.label}
-              </button>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-muted-foreground">
+                  <m.icon className="h-4.5 w-4.5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] font-bold text-foreground">{m.label}</span>
+                  <span className="block truncate text-[12px] text-muted-foreground">{m.desc}</span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </a>
             ))}
           </div>
-        </DialogContent>
-      </Dialog>
+        </section>
+      ))}
     </div>
   );
 }
@@ -374,7 +402,7 @@ function VideoDropdown({ active }: { active: boolean }) {
         <button
           className={cn(
             "group flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] font-semibold transition-colors",
-            active ? "bg-white/[0.07] text-[#3DB4F2]" : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+            active ? "bg-white/[0.07] text-primary" : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
           )}
           aria-expanded="false"
         >
@@ -413,7 +441,7 @@ function ImagesDropdown({ active }: { active: boolean }) {
         <button
           className={cn(
             "group flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] font-semibold transition-colors",
-            active ? "bg-white/[0.07] text-[#3DB4F2]" : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+            active ? "bg-white/[0.07] text-primary" : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
           )}
           aria-expanded="false"
         >
@@ -494,7 +522,7 @@ function NotificationBell() {
             >
               <div className="flex items-start gap-2.5">
                 <span
-                  className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? "bg-muted" : "bg-[#3DB4F2] yz-pulse-dot"}`}
+                  className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? "bg-muted" : "bg-primary yz-pulse-dot"}`}
                 />
                 <div className="min-w-0">
                   <p className="text-[13px] font-semibold leading-snug">{n.title}</p>
@@ -520,7 +548,7 @@ function UserMenu() {
           {user.avatarUrl ? (
             <img src={user.avatarUrl} alt="" className="h-7 w-7 rounded-lg" />
           ) : (
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#3DB4F2] text-xs font-bold text-[#04121E]">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
               {user.username.slice(0, 1).toUpperCase()}
             </span>
           )}

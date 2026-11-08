@@ -97,12 +97,13 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null
   }
 
-  return (
-    <style
-      dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
-            ([theme, prefix]) => `
+  // SECURITY: chart theming CSS is injected via `style.textContent` — never
+  // dangerouslySetInnerHTML. textContent on a <style> element cannot be
+  // parsed as HTML (the XSS vector is structurally impossible), and the
+  // string itself only ever contains safeColor()-validated color syntaxes.
+  const css = Object.entries(THEMES)
+    .map(
+      ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
@@ -116,11 +117,16 @@ ${colorConfig
   .join("\n")}
 }
 `
-          )
-          .join("\n"),
-      }}
-    />
-  )
+    )
+    .join("\n")
+
+  // Callback ref (not a hook — no ordering constraints): the CSS string is
+  // set as textContent, which can never be parsed as HTML.
+  const setStyleContent = (el: HTMLStyleElement | null) => {
+    if (el) el.textContent = css
+  }
+
+  return <style ref={setStyleContent} />
 }
 
 const ChartTooltip = RechartsPrimitive.Tooltip

@@ -86,7 +86,7 @@ export default function SearchView({ query }: { query: URLSearchParams }) {
   return (
     <div className="pb-6">
       <h1 className="font-display text-3xl text-white">
-        Results for <span className="text-[#3DB4F2]">“{q}”</span>
+        Results for <span className="text-primary">“{q}”</span>
       </h1>
       <p className="mt-1 text-[13px] text-muted-foreground">
         {search.isPending
@@ -158,7 +158,7 @@ export default function SearchView({ query }: { query: URLSearchParams }) {
               <AlertTriangle className="h-8 w-8 text-[#EF5B6B]" />
               <p className="mt-2 font-semibold">Search failed</p>
               <p className="mt-1 max-w-md text-sm text-muted-foreground">{(search.error as Error)?.message}</p>
-              <button onClick={() => void search.refetch()} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#3DB4F2]/15 px-4 py-2 text-sm font-bold text-[#3DB4F2]">
+              <button onClick={() => void search.refetch()} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-bold text-primary">
                 <RefreshCw className="h-3.5 w-3.5" /> Retry
               </button>
             </div>
@@ -196,7 +196,7 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
       onClick={onClick}
       className={cn(
         "shrink-0 rounded-full border px-3.5 py-1.5 text-[12.5px] font-bold transition-all",
-        active ? "border-transparent bg-[#3DB4F2] text-[#04121E]" : "border-border bg-card text-muted-foreground hover:text-foreground"
+        active ? "border-transparent bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground"
       )}
     >
       {label}

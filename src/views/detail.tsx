@@ -67,7 +67,7 @@ export default function DetailView({ provider, id }: { provider?: string | null;
       <div className="py-24 text-center">
         <p className="font-semibold">No title selected</p>
         <p className="mt-1 text-sm text-muted-foreground">Pick something from browse or search first.</p>
-        <a href="#/browse/ANIME" className="mt-4 inline-block text-sm font-semibold text-[#3DB4F2] hover:underline">← Back to browse</a>
+        <a href="#/browse/ANIME" className="mt-4 inline-block text-sm font-semibold text-primary hover:underline">← Back to browse</a>
       </div>
     );
   }
@@ -92,7 +92,7 @@ export default function DetailView({ provider, id }: { provider?: string | null;
         <p className="font-semibold">Could not load this title</p>
         <p className="mt-1 text-sm text-muted-foreground">{(error as Error)?.message ?? "The provider may be unreachable right now."}</p>
         <div className="mt-4 flex justify-center gap-3">
-          <button onClick={() => void refetch()} className="rounded-xl bg-[#3DB4F2]/15 px-4 py-2 text-sm font-bold text-[#3DB4F2]">Retry</button>
+          <button onClick={() => void refetch()} className="rounded-xl bg-primary/15 px-4 py-2 text-sm font-bold text-primary">Retry</button>
           <a href="#/browse/ANIME" className="rounded-xl px-4 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground">← Back to browse</a>
         </div>
       </div>
@@ -145,12 +145,12 @@ export default function DetailView({ provider, id }: { provider?: string | null;
       <div className="relative overflow-hidden">
         <div
           className="absolute inset-0"
-          style={{ background: `linear-gradient(160deg, ${hub}2e 0%, #101a2a 45%, #0B1622 100%)` }}
+          style={{ background: `linear-gradient(160deg, ${hub}2e 0%, #141519 45%, var(--background) 100%)` }}
         />
         {(work.bannerUrl || work.coverUrl) && (
           <img src={(work.bannerUrl ?? work.coverUrl)!} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0B1622] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
 
         <div className="relative mx-auto grid max-w-[1140px] gap-6 px-4 pb-6 pt-8 sm:grid-cols-[200px_1fr] sm:px-5 lg:px-5">
           <div className="mx-auto w-40 sm:mx-0 sm:w-full">

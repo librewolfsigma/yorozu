@@ -94,7 +94,7 @@ export default function GalleryView({ provider, id }: { provider?: string | null
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-[#080f19]" style={{ ["--hub" as string]: hub }}>
       {/* header */}
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-[#0B1622]/95 px-3 backdrop-blur">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/95 px-3 backdrop-blur">
         <Button variant="ghost" size="sm" className="gap-1.5 rounded-lg text-muted-foreground" onClick={() => navigate(backHref)}>
           <ArrowLeft className="h-4 w-4" /> <span className="hidden truncate sm:inline">{work.title}</span>
         </Button>

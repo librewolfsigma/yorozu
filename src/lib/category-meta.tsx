@@ -17,7 +17,7 @@ export interface CategoryMeta {
 }
 
 export const CATEGORIES: CategoryMeta[] = [
-  { key: "ANIME", label: "Anime", icon: Tv, hub: "#3DB4F2", hub2: "#1E97D8", action: "Watch now", unit: "episode" },
+  { key: "ANIME", label: "Anime", icon: Tv, hub: "var(--primary)", hub2: "#4648B8", action: "Watch now", unit: "episode" },
   { key: "MANGA", label: "Manga", icon: BookOpen, hub: "#3ED6B0", hub2: "#1A9C8E", action: "Read now", unit: "chapter" },
   { key: "DOUJIN", label: "Doujin", icon: Heart, hub: "#FF8AC2", hub2: "#E0559B", action: "Read now", unit: "chapter" },
   { key: "MANHWA", label: "Manhwa", icon: ScrollText, hub: "#FFBE4A", hub2: "#EE8424", action: "Read now", unit: "chapter" },

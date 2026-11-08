@@ -307,7 +307,7 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-[#080f19]" style={{ ["--hub" as string]: hub }}>
       {/* top bar */}
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-[#0B1622]/95 px-3 backdrop-blur">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/95 px-3 backdrop-blur">
         <Button variant="ghost" size="sm" className="gap-1.5 rounded-lg text-muted-foreground" onClick={() => navigate(backHref)}>
           <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">{work.title}</span>
         </Button>
@@ -385,7 +385,7 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
                   Automatic recovery already re-resolved the stream {autoRetries} time{autoRetries === 1 ? "" : "s"}. The link {work.providerName} served may keep expiring — a fresh resolve usually fixes it, or the video may be temporarily unavailable upstream.
                 </p>
                 <div className="mt-4 flex justify-center gap-2">
-                  <Button size="sm" className="rounded-lg text-[#04121E]" style={{ background: hub }} onClick={retryStream}>
+                  <Button size="sm" className="rounded-lg text-primary-foreground" style={{ background: hub }} onClick={retryStream}>
                     <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Try a fresh resolve
                   </Button>
                   {work.externalLinks.length > 0 && (
@@ -436,8 +436,8 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
 
           {/* custom controls (only when streaming successfully) */}
           {hasStream && !videoError && (
-            <div className="flex items-center gap-3 border-t border-border/70 bg-[#0B1622]/95 px-4 py-3">
-              <button onClick={togglePlay} className="flex h-10 w-10 items-center justify-center rounded-full text-[#04121E]" style={{ background: hub }} aria-label={playing ? "Pause" : "Play"}>
+            <div className="flex items-center gap-3 border-t border-border/70 bg-background/95 px-4 py-3">
+              <button onClick={togglePlay} className="flex h-10 w-10 items-center justify-center rounded-full text-primary-foreground" style={{ background: hub }} aria-label={playing ? "Pause" : "Play"}>
                 {playing ? <Pause className="h-4.5 w-4.5 fill-current" /> : <Play className="h-4.5 w-4.5 fill-current" />}
               </button>
               <button onClick={() => { setMuted((m) => !m); if (videoRef.current) videoRef.current.muted = !muted; }} className="text-muted-foreground hover:text-foreground" aria-label={muted ? "Unmute" : "Mute"}>
@@ -446,7 +446,7 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
               <span className="w-24 text-xs tabular-nums text-muted-foreground">
                 {fmtDuration(Math.floor(position))} / {fmtDuration(Math.floor(duration || ep.durationSec || 0))}
               </span>
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#23324A]">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#34353E]">
                 <div className="h-full rounded-full transition-all" style={{ width: duration ? `${(position / duration) * 100}%` : "0%", background: hub }} />
               </div>
               <button
@@ -470,7 +470,7 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
                   </Button>
                 )}
                 {nextEp && (
-                  <Button size="sm" className="gap-1 rounded-lg border-0 text-[#04121E]" style={{ background: hub }} onClick={() => navigate(watchHref(nextEp.key))}>
+                  <Button size="sm" className="gap-1 rounded-lg border-0 text-primary-foreground" style={{ background: hub }} onClick={() => navigate(watchHref(nextEp.key))}>
                     Next <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 )}
@@ -486,8 +486,8 @@ export default function WatchView({ provider, id, episodeKey }: { provider?: str
         </div>
 
         {/* episode sidebar */}
-        <aside className={cn("w-full shrink-0 border-t border-border/70 bg-[#0B1622]/60 lg:w-80 lg:border-l lg:border-t-0", "max-h-72 overflow-y-auto lg:max-h-none")}>
-          <p className="sticky top-0 bg-[#0B1622]/95 px-4 py-3 text-xs font-bold uppercase tracking-wide text-muted-foreground backdrop-blur">
+        <aside className={cn("w-full shrink-0 border-t border-border/70 bg-background/60 lg:w-80 lg:border-l lg:border-t-0", "max-h-72 overflow-y-auto lg:max-h-none")}>
+          <p className="sticky top-0 bg-background/95 px-4 py-3 text-xs font-bold uppercase tracking-wide text-muted-foreground backdrop-blur">
             All {isAV ? "scenes" : "episodes"} ({episodes.length})
           </p>
           <div className="space-y-1 px-2 pb-4">

@@ -14,7 +14,7 @@ export function AgeGate({ open, onAccept }: { open: boolean; onAccept: () => voi
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#070d16]/95 backdrop-blur-md p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-121317/95 backdrop-blur-md p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

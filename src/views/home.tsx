@@ -102,7 +102,7 @@ export default function HomeView() {
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-[15px] font-bold text-white">
-              <Sparkles className="h-4 w-4 text-[#3DB4F2]" /> Spotlight
+              <Sparkles className="h-4 w-4 text-primary" /> Spotlight
             </h2>
             <span className="rounded-full bg-[#EF5B6B]/15 px-2 py-0.5 text-[10px] font-bold text-[#FF8B96]">18+</span>
           </div>
@@ -122,7 +122,7 @@ export default function HomeView() {
                     loading="lazy"
                     className="absolute inset-0 h-full w-full object-cover opacity-60 transition-opacity group-hover:opacity-75"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0B1622] via-[#0B1622]/45 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-background via-background/45 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-3">
                     <span className="rounded-full px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider" style={{ background: `${mm.hub}26`, color: mm.hub }}>
                       {mm.label} · via {m.providerName}
@@ -259,7 +259,7 @@ function ContinueCard({ item }: { item: ContinueItem }) {
           <div className="h-full w-full bg-muted" />
         )}
         <div className="absolute inset-0 z-[5] flex items-center justify-center bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full" style={{ background: meta.hub, color: "#04121E" }}>
+          <div className="flex h-11 w-11 items-center justify-center rounded-full" style={{ background: meta.hub, color: "var(--primary-foreground)" }}>
             <Play className="h-5 w-5 fill-current" />
           </div>
         </div>
@@ -285,11 +285,11 @@ function Section({ title, icon, href, children }: { title: string; icon?: React.
     <section>
       <div className="mb-3.5 flex items-baseline justify-between gap-3">
         <h2 className="flex items-center gap-2 text-lg font-bold text-white">
-          {icon && <span className="text-[#3DB4F2]">{icon}</span>}
+          {icon && <span className="text-primary">{icon}</span>}
           {title}
         </h2>
         {href && (
-          <a href={`#${href}`} className="flex items-center gap-0.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-[#3DB4F2]">
+          <a href={`#${href}`} className="flex items-center gap-0.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-primary">
             View all <ChevronRight className="h-3.5 w-3.5" />
           </a>
         )}
@@ -388,7 +388,7 @@ function CategoryTabs({ categories }: { categories: Record<string, WorkDTO[]> })
             </Button>
             <a
               href={`#/browse/${active}`}
-              className="flex items-center gap-0.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-[#3DB4F2]"
+              className="flex items-center gap-0.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-primary"
             >
               Browse all {meta.label} <ChevronRight className="h-3.5 w-3.5" />
             </a>

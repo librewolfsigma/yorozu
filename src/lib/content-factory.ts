@@ -42,7 +42,7 @@ export function avatarUrl(seed: string, label: string): string {
 
 // Per-category "hub" accents modeled after Hikari's per-section accent system.
 export const CATEGORY_ACCENTS: Record<string, [string, string]> = {
-  ANIME: ["#3DB4F2", "#1E97D8"],
+  ANIME: ["#5C5ECD", "#4648B8"],
   MANGA: ["#3ED6B0", "#1A9C8E"],
   DOUJIN: ["#FF8AC2", "#E0559B"],
   MANHWA: ["#FFBE4A", "#EE8424"],
@@ -56,7 +56,7 @@ export const CATEGORY_ACCENTS: Record<string, [string, string]> = {
 };
 
 export function accentFor(category: string, key: string): [string, string] {
-  const [a, b] = CATEGORY_ACCENTS[category] ?? ["#3DB4F2", "#1E97D8"];
+  const [a, b] = CATEGORY_ACCENTS[category] ?? ["#5C5ECD", "#4648B8"];
   const rand = mulberry32(hashString(key));
   const jitter = Math.floor(rand() * 3);
   if (jitter === 0) return [a, b];

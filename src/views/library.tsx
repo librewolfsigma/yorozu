@@ -78,7 +78,7 @@ export function RefPoster({ work }: { work: WorkRef }) {
           <div className="h-full w-full bg-muted" />
         )}
         <div className="absolute inset-0 z-[5] flex items-center justify-center bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full" style={{ background: meta.hub, color: "#04121E" }}>
+          <div className="flex h-12 w-12 items-center justify-center rounded-full" style={{ background: meta.hub, color: "var(--primary-foreground)" }}>
             <Play className="h-5 w-5 fill-current" />
           </div>
         </div>
@@ -127,7 +127,7 @@ export default function LibraryView() {
         <p className="mt-1 max-w-sm text-sm text-muted-foreground">
           Track everything you read, watch and play across categories. No account needed — Yozora has no login.
         </p>
-        <a href="#/settings" className="mt-4 text-sm font-semibold text-[#3DB4F2] hover:underline">Go to sign in →</a>
+        <a href="#/settings" className="mt-4 text-sm font-semibold text-primary hover:underline">Go to sign in →</a>
       </div>
     );
   }
@@ -139,7 +139,7 @@ export default function LibraryView() {
   return (
     <div className="pb-6">
       <div className="mb-5 flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#3DB4F2]/15 text-[#3DB4F2]">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
           <LibraryIcon className="h-5 w-5" />
         </span>
         <div>
@@ -154,7 +154,7 @@ export default function LibraryView() {
       {continueRow.length > 0 && (
         <section className="mb-7">
           <h2 className="mb-3 flex items-center gap-1.5 text-[15px] font-bold">
-            <Play className="h-4 w-4 fill-[#3DB4F2] text-[#3DB4F2]" /> Continue
+            <Play className="h-4 w-4 fill-primary text-primary" /> Continue
           </h2>
           <div className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
             {continueRow.map((p) => {
@@ -223,7 +223,7 @@ export default function LibraryView() {
                 <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
                   Open any title from Browse or Search and use “Add to library”.
                 </p>
-                <a href="#/browse/ANIME" className="mt-3 inline-block text-sm font-semibold text-[#3DB4F2] hover:underline">Browse sources →</a>
+                <a href="#/browse/ANIME" className="mt-3 inline-block text-sm font-semibold text-primary hover:underline">Browse sources →</a>
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

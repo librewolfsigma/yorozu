@@ -3,7 +3,7 @@
 // VERIFIED from sandbox: POST https://graphql.anilist.co returns real data.
 
 import { LiveFetchError, livePostJson } from "./http";
-import type { LiveAdapter, LiveSearchItem, LiveUnits } from "./types";
+import type { LiveAdapter, LiveSearchItem } from "./types";
 
 const ENDPOINT = "https://graphql.anilist.co";
 

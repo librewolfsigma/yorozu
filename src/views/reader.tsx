@@ -235,7 +235,7 @@ function ChapterReader({ work, chapters, chapter, pages, pagesLoading, pagesFail
       {/* top chrome */}
       <header
         className={cn(
-          "z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-[#0B1622]/95 px-3 backdrop-blur transition-transform duration-300",
+          "z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/95 px-3 backdrop-blur transition-transform duration-300",
           !showChrome && "-translate-y-full"
         )}
       >
@@ -371,7 +371,7 @@ function ChapterReader({ work, chapters, chapter, pages, pagesLoading, pagesFail
               </p>
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 {nextChapter && (
-                  <Button className="rounded-xl border-0 text-[#04121E]" style={{ background: hub }} onClick={() => navigate(readHref(nextChapter.key))}>
+                  <Button className="rounded-xl border-0 text-primary-foreground" style={{ background: hub }} onClick={() => navigate(readHref(nextChapter.key))}>
                     Next: Ch. {nextChapter.number} <ChevronRight className="h-4 w-4" />
                   </Button>
                 )}
@@ -391,7 +391,7 @@ function ChapterReader({ work, chapters, chapter, pages, pagesLoading, pagesFail
 
       {/* bottom chrome (paged) */}
       {mode === "paged" && (
-        <footer className={cn("z-10 flex h-16 shrink-0 items-center gap-3 border-t border-border/70 bg-[#0B1622]/95 px-4 backdrop-blur transition-transform duration-300", !showChrome && "translate-y-full")}>
+        <footer className={cn("z-10 flex h-16 shrink-0 items-center gap-3 border-t border-border/70 bg-background/95 px-4 backdrop-blur transition-transform duration-300", !showChrome && "translate-y-full")}>
           <Button variant="ghost" size="sm" className="gap-1 rounded-lg" onClick={(e) => { e.stopPropagation(); goPage(-1); }}>
             <ChevronLeft className="h-4 w-4" /> Prev
           </Button>
@@ -402,7 +402,7 @@ function ChapterReader({ work, chapters, chapter, pages, pagesLoading, pagesFail
             value={pageIdx}
             onChange={(e) => setPageIdx(Number(e.target.value))}
             onClick={(e) => e.stopPropagation()}
-            className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-[#23324A] accent-[var(--hub)]"
+            className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-[#34353E] accent-[var(--hub)]"
             aria-label="Page position"
           />
           <Button variant="ghost" size="sm" className="gap-1 rounded-lg" onClick={(e) => { e.stopPropagation(); goPage(1); }}>
@@ -428,7 +428,7 @@ function GalleryFallback({ data, backHref }: { data: WorkDetail; backHref: strin
   const hub = work.accent || categoryMeta(work.category).hub;
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-[#080f19]" style={{ ["--hub" as string]: hub }}>
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-[#0B1622]/95 px-3 backdrop-blur">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/95 px-3 backdrop-blur">
         <Button variant="ghost" size="sm" className="gap-1.5 rounded-lg text-muted-foreground" onClick={() => navigate(backHref)}>
           <ArrowLeft className="h-4 w-4" /> <span className="hidden truncate sm:inline">{work.title}</span>
         </Button>

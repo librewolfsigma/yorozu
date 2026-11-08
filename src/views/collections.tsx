@@ -102,7 +102,7 @@ export default function CollectionsView() {
           <h1 className="font-display text-3xl text-white">Collections</h1>
           <p className="text-[13px] text-muted-foreground">{data?.collections.length ?? 0} collections</p>
         </div>
-        <Button className="gap-1.5 rounded-xl border-0 text-[#04121E]" style={{ background: "#AE8BFF" }} onClick={() => setCreateOpen(true)}>
+        <Button className="gap-1.5 rounded-xl border-0 text-primary-foreground" style={{ background: "#AE8BFF" }} onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" /> New collection
         </Button>
       </div>
@@ -157,7 +157,7 @@ export default function CollectionsView() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button className="rounded-lg border-0 text-[#04121E]" style={{ background: "#AE8BFF" }} disabled={!name.trim() || create.isPending} onClick={() => create.mutate()}>
+            <Button className="rounded-lg border-0 text-primary-foreground" style={{ background: "#AE8BFF" }} disabled={!name.trim() || create.isPending} onClick={() => create.mutate()}>
               {create.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Create
             </Button>
           </DialogFooter>

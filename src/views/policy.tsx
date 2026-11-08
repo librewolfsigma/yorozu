@@ -27,7 +27,7 @@ const SECTIONS = [
   {
     icon: Scale,
     title: "3. Licensing & provider respect",
-    color: "#3DB4F2",
+    color: "var(--primary)",
     points: [
       "We respect provider licensing, terms of service, and technical access controls.",
       "Adapters never bypass authentication, DRM, paywalls, or regional restrictions.",

@@ -46,52 +46,55 @@
 }
 
 /*
- * Yozora design language — inspired by the publicly observable aesthetic of
- * myhikari.in (see docs/recon/hikari-design.md): near-black navy base, one
- * surface step, hairline borders, 3-step text ramp, electric accent, per-section
- * hub colors. Original code and assets.
+ * Yozora design language — Mihon/Aniyomi client chrome (user directive):
+ * flat dark surfaces (#1C1D22 base / #26272D cards), hairline borders,
+ * periwinkle-indigo primary (#5C5ECD), clean sans display, per-category
+ * hub accents for content sections. Original code and assets.
  */
 :root {
-  --radius: 0.875rem;
-  --background: #0B1622;
-  --foreground: #E4EDF6;
-  --card: #151F2E;
-  --card-foreground: #E4EDF6;
-  --popover: #151F2E;
-  --popover-foreground: #E4EDF6;
-  --primary: #3DB4F2;
-  --primary-foreground: #04121E;
-  --secondary: #1B2A3D;
-  --secondary-foreground: #E4EDF6;
-  --muted: #1A2434;
-  --muted-foreground: #6C8299;
-  --accent: #1B2A3D;
-  --accent-foreground: #E4EDF6;
+  /* Mihon/Aniyomi dark theme (user directive: client UI mirrors Aniyomi).
+     Flat dark surfaces, periwinkle-indigo primary, hairline dividers. */
+  --radius: 0.75rem;
+  --background: #1C1D22;
+  --foreground: #E8EAF0;
+  --card: #26272D;
+  --card-foreground: #E8EAF0;
+  --popover: #2A2B32;
+  --popover-foreground: #E8EAF0;
+  --primary: #5C5ECD;
+  --primary-foreground: #FFFFFF;
+  --secondary: #31323A;
+  --secondary-foreground: #E8EAF0;
+  --muted: #2A2B32;
+  --muted-foreground: #9BA0B0;
+  --accent: #31323A;
+  --accent-foreground: #E8EAF0;
   --destructive: #EF5B6B;
-  --border: #23324A;
-  --input: #23324A;
-  --ring: #3DB4F2;
-  --chart-1: #3DB4F2;
+  --border: #34353E;
+  --input: #34353E;
+  --ring: #5C5ECD;
+  --chart-1: #5C5ECD;
   --chart-2: #AE8BFF;
   --chart-3: #3ED6B0;
   --chart-4: #FFBE4A;
   --chart-5: #FF6F91;
-  --sidebar: #0e1a28;
-  --sidebar-foreground: #9FADBD;
-  --sidebar-primary: #3DB4F2;
-  --sidebar-primary-foreground: #04121E;
-  --sidebar-accent: #1B2A3D;
-  --sidebar-accent-foreground: #E4EDF6;
-  --sidebar-border: #23324A;
-  --sidebar-ring: #3DB4F2;
-  --hub: #3DB4F2;
-  --hub-soft: color-mix(in srgb, var(--hub) 14%, #151F2E);
+  --sidebar: #1C1D22;
+  --sidebar-foreground: #9BA0B0;
+  --sidebar-primary: #5C5ECD;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #31323A;
+  --sidebar-accent-foreground: #E8EAF0;
+  --sidebar-border: #34353E;
+  --sidebar-ring: #5C5ECD;
+  --hub: #5C5ECD;
+  --hub-soft: color-mix(in srgb, var(--hub) 14%, #26272D);
   --font-body: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
 .font-display {
-  font-family: "Lalezar", "Baloo 2", var(--font-body);
-  letter-spacing: 0.01em;
+  font-family: var(--font-body);
+  font-weight: 800;
+  letter-spacing: -0.015em;
 }
 
 @layer base {
@@ -111,18 +114,18 @@
 /* ── Scrollbars ── */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #23324A transparent;
+  scrollbar-color: #34353E transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #23324A;
+  background: #34353E;
   border-radius: 999px;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #31435f;
+  background: #454651;
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -134,7 +137,7 @@
 
 /* ── Hikari-style chrome ── */
 .glass-header {
-  background: rgba(21, 31, 46, 0.92);
+  background: rgba(28, 29, 34, 0.94);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
@@ -158,18 +161,16 @@
 }
 
 .cta-gradient {
-  background: linear-gradient(100deg, var(--hub, #3DB4F2), #8B5CF6);
+  background: var(--primary);
   color: #fff;
-  box-shadow:
-    0 16px 36px -14px rgba(110, 110, 255, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  box-shadow: 0 8px 22px -10px color-mix(in srgb, var(--primary) 65%, transparent);
 }
 .cta-gradient:hover {
   filter: brightness(1.08);
 }
 
 .hub-soft {
-  background: color-mix(in srgb, var(--hub) 14%, #151F2E);
+  background: color-mix(in srgb, var(--hub) 14%, #26272D);
 }
 .hub-text {
   color: var(--hub);

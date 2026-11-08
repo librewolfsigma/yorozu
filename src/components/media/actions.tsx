@@ -204,7 +204,7 @@ export function CollectionPicker({ work, hub, collections }: {
           <div className="flex gap-2">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="New collection name" className="rounded-lg bg-background" />
             <Button
-              className="shrink-0 rounded-lg border-0 text-[#04121E]"
+              className="shrink-0 rounded-lg border-0 text-primary-foreground"
               style={{ background: hub }}
               disabled={!name.trim() || createAndAdd.isPending}
               onClick={() => createAndAdd.mutate()}
@@ -267,7 +267,7 @@ export function ReportDialog({ targetType, targetId }: { targetType: string; tar
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button className="rounded-lg border-0 text-[#04121E]" style={{ background: "#3DB4F2" }} disabled={submit.isPending} onClick={() => submit.mutate()}>
+          <Button className="rounded-lg border-0 text-primary-foreground" style={{ background: "var(--primary)" }} disabled={submit.isPending} onClick={() => submit.mutate()}>
             {submit.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Submit report
           </Button>
         </DialogFooter>
@@ -355,7 +355,7 @@ export function ReviewSection({ work, reviews, hub, rating, ratingCount }: {
                 <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete mine
               </Button>
             )}
-            <Button size="sm" className="rounded-lg border-0 text-[#04121E]" style={{ background: hub }} disabled={submit.isPending} onClick={() => submit.mutate()}>
+            <Button size="sm" className="rounded-lg border-0 text-primary-foreground" style={{ background: hub }} disabled={submit.isPending} onClick={() => submit.mutate()}>
               {submit.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : mine ? "Update review" : "Post review"}
             </Button>
           </div>

@@ -134,7 +134,7 @@ export default function ScriptsView() {
                   ) : (
                     <Button
                       size="sm"
-                      className="h-8 gap-1 rounded-lg border-0 text-xs text-[#04121E]"
+                      className="h-8 gap-1 rounded-lg border-0 text-xs text-primary-foreground"
                       style={{ background: "#3BD47A" }}
                       disabled={mutate.isPending}
                       onClick={() => {

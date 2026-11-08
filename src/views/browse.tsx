@@ -63,12 +63,12 @@ function BrowseTabs({ initialTab }: { initialTab: number }) {
             onClick={() => setTab(i)}
             className={cn(
               "relative flex items-center gap-1.5 px-4 py-2.5 text-[13.5px] font-bold transition-colors",
-              tab === i ? "text-[#3DB4F2]" : "text-muted-foreground hover:text-foreground",
+              tab === i ? "text-primary" : "text-muted-foreground hover:text-foreground",
             )}
           >
             <t.icon className="h-4 w-4" />
             {t.label}
-            {tab === i && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-[#3DB4F2]" />}
+            {tab === i && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary" />}
           </button>
         ))}
       </div>
@@ -241,7 +241,7 @@ function FeedBrowser({ category, kind }: { category: string; kind: string }) {
           </p>
           <button
             onClick={() => navigate("/extensions")}
-            className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-[#04121E] cta-gradient press-scale"
+            className="mt-4 rounded-lg px-4 py-2 text-sm font-bold text-primary-foreground cta-gradient press-scale"
           >
             Open Extensions
           </button>

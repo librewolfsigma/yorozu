@@ -63,7 +63,7 @@ export default function SettingsView() {
   return (
     <div className="pb-6">
       <div className="mb-5 flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#6C8299]/20 text-[#9FADBD]">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#9BA0B0]/20 text-[#9FADBD]">
           <Settings className="h-5 w-5" />
         </span>
         <div>
@@ -94,7 +94,7 @@ export default function SettingsView() {
               </span>
             </div>
           </div>
-          <p className="rounded-xl border border-[#3DB4F2]/25 bg-[#3DB4F2]/10 p-4 text-[13px] text-foreground/85">
+          <p className="rounded-xl border border-primary/25 bg-primary/10 p-4 text-[13px] text-foreground/85">
             Yozora has <strong>no accounts and no login</strong>. Your library, progress, collections and
             reviews live on this device under a local profile — nothing to sign up for, nothing to lock.
           </p>
@@ -115,7 +115,7 @@ export default function SettingsView() {
                   aria-pressed={defaultReaderMode === m.key}
                   className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
                     defaultReaderMode === m.key
-                      ? "border-[#3DB4F2] bg-[#3DB4F2]/15 text-[#3DB4F2]"
+                      ? "border-primary bg-primary/15 text-primary"
                       : "border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >

@@ -25,6 +25,7 @@ const SettingsView = lazy(() => import("@/views/settings"));
 const PolicyView = lazy(() => import("@/views/policy"));
 const SourceView = lazy(() => import("@/views/source"));
 const SourcesView = lazy(() => import("@/views/sources"));
+import { MoreView } from "@/components/shell";
 
 function ViewFallback() {
   return (
@@ -67,6 +68,7 @@ function Router() {
   else if (head === "policy") view = <PolicyView />;
   else if (head === "source") view = <SourceView providerId={a} />;
   else if (head === "sources") view = <SourcesView />;
+  else if (head === "more") view = <MoreView />;
   else view = <HomeView />;
 
   return (

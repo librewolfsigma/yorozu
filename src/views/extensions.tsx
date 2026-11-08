@@ -75,7 +75,7 @@ function CategoryHeader({ category, count }: { category: string; count: number }
 
 function AvailabilityChips({ a }: { a: ProviderRow["availability"] }) {
   const chips: { icon: LucideIcon; label: string; color: string }[] = [];
-  if (a.watch) chips.push({ icon: Play, label: "Watch", color: "#3DB4F2" });
+  if (a.watch) chips.push({ icon: Play, label: "Watch", color: "var(--primary)" });
   if (a.read) chips.push({ icon: BookOpen, label: "Read", color: "#3ED6B0" });
   if (a.view) chips.push({ icon: ImageIcon, label: "View", color: "#AE8BFF" });
   if (chips.length === 0) {
@@ -253,8 +253,8 @@ export default function ExtensionsView({ embedded }: { embedded?: boolean } | un
       )}
 
       {!embedded && (
-      <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#3DB4F2]/25 bg-[#3DB4F2]/10 p-3 text-xs leading-relaxed text-foreground/85">
-        <span className="font-bold text-[#3DB4F2]">How it works:</span>
+      <div className="mb-4 flex items-start gap-2 rounded-xl border border-primary/25 bg-primary/10 p-3 text-xs leading-relaxed text-foreground/85">
+        <span className="font-bold text-primary">How it works:</span>
         Every installed provider is a live adapter hitting its upstream API or site — health checks are real requests and
         any error shown is the provider&apos;s own response. Yozora keeps no local catalog:
         <button className="mx-1 underline" onClick={() => navigate("/browse/ANIME")}>Browse</button>
@@ -486,7 +486,7 @@ export default function ExtensionsView({ embedded }: { embedded?: boolean } | un
                         </div>
                         <Button
                           size="sm"
-                          className="h-8 shrink-0 gap-1 rounded-lg border-0 text-xs text-[#04121E]"
+                          className="h-8 shrink-0 gap-1 rounded-lg border-0 text-xs text-primary-foreground"
                           style={{ background: meta.hub }}
                           onClick={() => {
                             if (!user) {
@@ -557,7 +557,7 @@ export default function ExtensionsView({ embedded }: { embedded?: boolean } | un
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfigFor(null)}>Cancel</Button>
-            <Button className="rounded-lg border-0 text-[#04121E]" style={{ background: "#3BD47A" }} disabled={configure.isPending} onClick={() => configure.mutate()}>
+            <Button className="rounded-lg border-0 text-primary-foreground" style={{ background: "#3BD47A" }} disabled={configure.isPending} onClick={() => configure.mutate()}>
               {configure.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Save
             </Button>
           </DialogFooter>

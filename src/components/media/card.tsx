@@ -143,7 +143,7 @@ export function MediaCard({
         <div className="absolute inset-0 z-[5] flex items-center justify-center bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100">
           <div
             className="flex h-12 w-12 items-center justify-center rounded-full"
-            style={{ background: hub, color: "#04121E" }}
+            style={{ background: hub, color: "var(--primary-foreground)" }}
           >
             <Play className="h-5 w-5 fill-current" />
           </div>

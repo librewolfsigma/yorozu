@@ -65,7 +65,7 @@ export default function ProfileView() {
               { label: "Mean score", value: meanScore ? meanScore.toFixed(1) : "—", icon: Star },
             ].map((s) => (
               <div key={s.label} className="rounded-xl border border-border bg-card px-4 py-3 text-center">
-                <s.icon className="mx-auto h-4 w-4 text-[#3DB4F2]" />
+                <s.icon className="mx-auto h-4 w-4 text-primary" />
                 <p className="mt-1 font-display text-xl text-white">{s.value}</p>
                 <p className="text-[10px] text-muted-foreground">{s.label}</p>
               </div>

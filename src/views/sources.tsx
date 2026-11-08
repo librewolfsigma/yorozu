@@ -68,7 +68,7 @@ export default function SourcesView({ embedded }: { embedded?: boolean } | undef
     <div className="pb-6">
       {!embedded && (
       <div className="mb-5 flex flex-wrap items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl hub-soft" style={{ color: "#3DB4F2" }}>
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl hub-soft" style={{ color: "var(--primary)" }}>
           <Puzzle className="h-5 w-5" />
         </span>
         <div className="flex-1">
@@ -132,7 +132,7 @@ export default function SourcesView({ embedded }: { embedded?: boolean } | undef
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
           <Puzzle className="h-10 w-10 text-muted-foreground" />
           <p className="mt-3 font-semibold">No sources match “{q}”</p>
-          <button onClick={() => setQ("")} className="mt-3 text-[13px] font-bold text-[#3DB4F2] hover:underline">
+          <button onClick={() => setQ("")} className="mt-3 text-[13px] font-bold text-primary hover:underline">
             Clear filter
           </button>
         </div>
@@ -167,7 +167,7 @@ export default function SourcesView({ embedded }: { embedded?: boolean } | undef
 
       <p className={cn("text-center text-[12.5px] text-muted-foreground", embedded && "mt-6 text-left")}>
         Install or configure more sources in{" "}
-        <a href="#/extensions" className="font-bold text-[#3DB4F2] hover:underline">
+        <a href="#/extensions" className="font-bold text-primary hover:underline">
           Extensions
         </a>{" "}
         — including synced upstream extension repositories.

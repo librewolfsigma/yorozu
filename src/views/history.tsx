@@ -19,9 +19,9 @@ interface HistoryEntry {
 }
 
 const ACTION_META: Record<string, { label: string; color: string }> = {
-  VIEW: { label: "Viewed", color: "#6C8299" },
+  VIEW: { label: "Viewed", color: "#9BA0B0" },
   READ: { label: "Read", color: "#3ED6B0" },
-  WATCH: { label: "Watched", color: "#3DB4F2" },
+  WATCH: { label: "Watched", color: "var(--primary)" },
   PLAY: { label: "Played", color: "#FF6F91" },
   SEARCH: { label: "Searched", color: "#FFBE4A" },
   BROWSE: { label: "Browsed", color: "#AE8BFF" },

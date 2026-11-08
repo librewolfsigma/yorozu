@@ -201,7 +201,7 @@ function ProviderHealth({ rows }: { rows: ProviderHealthRow[] }) {
     return (
       <p className="rounded-xl border border-dashed border-border bg-card/50 p-8 text-center text-sm text-muted-foreground">
         No providers installed yet — add one from the{" "}
-        <a href="#/extensions" className="font-semibold text-[#3DB4F2] hover:underline">Extensions page</a>.
+        <a href="#/extensions" className="font-semibold text-primary hover:underline">Extensions page</a>.
       </p>
     );
   }
@@ -210,7 +210,7 @@ function ProviderHealth({ rows }: { rows: ProviderHealthRow[] }) {
       <div className="min-w-[560px]">
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <h3 className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground">Provider health</h3>
-          <a href="#/extensions" className="text-xs font-semibold text-[#3DB4F2] hover:underline">Manage in Extensions</a>
+          <a href="#/extensions" className="text-xs font-semibold text-primary hover:underline">Manage in Extensions</a>
         </div>
         <table className="w-full text-left text-[13px]">
           <thead>
@@ -240,7 +240,7 @@ function ProviderHealth({ rows }: { rows: ProviderHealthRow[] }) {
                             <AlertTriangle className="h-3 w-3" /> ERROR
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent className="max-w-72 border border-border bg-[#101a2a]">
+                        <TooltipContent className="max-w-72 border border-border bg-141519">
                           <p className="font-bold">Last error</p>
                           <p className="mt-0.5 text-foreground/80">{p.lastError}</p>
                         </TooltipContent>

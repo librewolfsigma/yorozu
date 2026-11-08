@@ -12,7 +12,7 @@
 // the curl-resilient transport — see ./hanime.ts.
 
 import { match1, matchAll, liveTextResilient, stripTags, htmlDecode } from "./http";
-import type { LiveAdapter, LiveSearchItem, LiveUnits } from "./types";
+import type { LiveAdapter, LiveSearchItem } from "./types";
 
 // ─── Rule34Video (KVS) ───
 
