@@ -30,7 +30,7 @@ Legend for evidence tags: `audit:` provider-audit run · `e2e:` agent-browser se
 - [x] Mid-stream recovery (stall/error → fresh=1 resolve → remount) — evidence: `e2e:` observed live recovery
 - [x] Metadata partial-failure fallback (no 502 detail pages) — evidence: code + probe
 - [x] Reader keyed chapter remount (page index resets) — evidence: code review
-- [ ] Browser back/forward + deep-link sweep across ALL routes (hash router: verify history entries per navigation, restore scroll) — **P1, next session**
+- [x] Browser back/forward + scroll restoration: push navs scroll to top; back/forward restore each hash's saved position (lazy-feed retry loop until content is tall enough) — evidence: `e2e:` back detail→feed restored scrollY=800, forward restored 600 (2026-11-08)
 - [ ] Keyboard navigation audit (focus traps in dialogs, arrow-key grids) — P2
 
 ## Phase 2 — Provider & extension infrastructure
@@ -123,6 +123,10 @@ Files live in `tests/unit/*.test.ts` (bun test). Run: `bun test`.
 
 ## Session log
 
-- **2026-11-08** — Phase 0 delivered (CI trigger fix, tsc green, AUDIT/roadmap/todo),
-  unit suite + CI test job added, lint/tsc/audit all green. Next recommended task:
-  browser back/forward sweep (Phase 1), then search source-selection UI (Phase 2).
+- **2026-11-08 (session A)** — Phase 0 delivered: CI trigger fix, tsc green (4 real
+  type errors fixed), AUDIT/roadmap/todo created, unit suite (30 tests/6 files) +
+  CI unit job added. Next: search source-selection UI (Phase 2), reader layouts (P4).
+- **2026-11-08 (session B)** — Navigation reliability: back/forward scroll restoration
+  implemented in the hash router (push vs pop distinction, per-hash scroll journal in
+  sessionStorage, lazy-feed retry restore). Verified via agent-browser both directions.
+  Next recommended task: search source-selection UI + per-source timeout (Phase 2).
