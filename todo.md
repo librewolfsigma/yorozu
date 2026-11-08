@@ -11,7 +11,48 @@ Legend for evidence tags: `audit:` provider-audit run · `e2e:` agent-browser se
 
 ---
 
-## Phase 0 — Foundations
+## Phase R — Rebase onto seanime (ACTIVE TRACK, supersedes Phases 1–10)
+
+Owner directive 2026-11-08: fork [seanime](https://github.com/5rahim/seanime)
+and implement Yozora's goals on it. See roadmap §0.
+
+- [x] Attempt GitHub fork; stale `yozora` Next.js mirror renamed to `yozora-legacy`
+  (mirror backup kept at `~/work/yozora-legacy-backup.git`) — `probe:` API 200
+- [x] Fork created: [librewolfsigma/yozora](https://github.com/librewolfsigma/yozora),
+  full history, GPL-3.0, description set — `probe:` API shows fork:true, size 579570
+- [x] Extension system studied from source (evidence: `internal/extension_repo/`):
+  global `class Provider` contract for manga-provider (search/findChapters/
+  findChapterPages/getSettings) and onlinestream-provider (search/findEpisodes/
+  findEpisodeServer/getSettings); payload TS→JS via esbuild (ES2018); goja fetch
+  binds a Chrome UA by default; `res.text()/json()` are sync; marketplace is an
+  array of manifest summaries; install-repository takes `{urls:[...]}`
+- [x] 5 extensions implemented + ported from verified live adapters:
+  yozora-nhentai (manga), yozora-hentaiocean, yozora-iwara, yozora-pmvhaven,
+  yozora-hmvmania (onlinestream) — evidence: harness 40/40 (live upstreams;
+  HTTP 206 video/mp4 on every stream; image/webp pages; honest-refusal checks)
+- [x] Published to `yozora-extensions` (commit `4a8bc69`): manifests w/ payloadURI,
+  icons, READMEs, `marketplace.json`, `repo.json`; all 10 runtime raw URLs → 200
+- [x] Install simulation green (repo.json → manifests → payloads → transpile →
+  `new Provider()` → getSettings → marketplace consistency)
+- [!] Load extensions inside a real seanime binary — **blocked: Go toolchain not
+  installed in sandbox** (`go: command not found`); try apt/brew-free Go install
+  or verify on owner machine. Harness (goja-faithful) is the interim evidence.
+- [ ] Move verification harness (`~/work/ext-harness`: harness.ts, install-sim.ts,
+  icons.ts) into `yozora-extensions` repo + CI workflow to run it on every push
+- [ ] CustomSource evaluation: map HMV/PMV browse feeds to a custom-source
+  extension (browse-first UX inside seanime) — needs `internal/customsource`
+  study + real-binary verification (blocked on Go, same as above)
+- [ ] NSFW-API self-host as a user-config extension (manifest `userConfig`
+  baseUrl field) — needs a reachable self-hosted instance to verify against
+- [ ] Fork sync policy: periodic `gh repo sync librewolfsigma/yozora` (or API
+  merge-upstream); keep fork pristine (no divergent commits) until custom
+  branding is actually needed
+- [?] Owner decision: retire the legacy Next.js app (`yorozu`) once seanime
+  track is confirmed working end-to-end on the owner's machine
+
+---
+
+## Phase 0 — Foundations (LEGACY Next.js track)
 
 - [x] CI gates installed from WasewaseX/master-ci (master quick profile + CodeQL); trigger fixed `branches: [main]` — evidence: `.github/workflows/ci.yml`, tsc+lint green 2026-11-08
 - [x] Fix all reported lint findings (chart innerHTML → textContent ref; unused imports/params; a11y already hardened) — evidence: `lint:` clean
@@ -130,3 +171,9 @@ Files live in `tests/unit/*.test.ts` (bun test). Run: `bun test`.
   implemented in the hash router (push vs pop distinction, per-hash scroll journal in
   sessionStorage, lazy-feed retry restore). Verified via agent-browser both directions.
   Next recommended task: search source-selection UI + per-source timeout (Phase 2).
+- **2026-11-08 (session C)** — **PIVOT**: seanime fork created (`librewolfsigma/yozora`),
+  5-extension provider pack published to `yozora-extensions` (40/40 live harness,
+  install-sim all green), Phase R opened in this file, roadmap §0 records the
+  decision + honest caveats (Go missing in sandbox → real-binary load test pending).
+  Legacy Next.js track moved to maintenance. Next: install Go or verify on owner
+  machine; move harness into extensions repo; CustomSource browse evaluation.

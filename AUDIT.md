@@ -11,6 +11,23 @@ checks in `todo.md`.
 
 ---
 
+## 0. Pivot audit (2026-11-08, session C) — seanime track
+
+| Item | Status | Evidence |
+|---|---|---|
+| Fork `librewolfsigma/yozora` of 5rahim/seanime | **REAL** | GitHub API: `fork: true`, parent set, full size 579570 KB, GPL-3.0 |
+| Stale Next.js mirror renamed `yozora-legacy` (+ local mirror backup) | **REAL** | API 200 on renamed repo; `~/work/yozora-legacy-backup.git` cloned |
+| Extension contract extraction (manga + onlinestream providers) | **REAL** | Read from fork source: `internal/extension_repo/goja_manga_provider.go`, `goja_onlinestream_provider.go`, `goja_base.go` (`new Provider()`), `goja_plugin_types/core.d.ts` (fetch/Doc/Crypto/$store), `hibike/{manga,onlinestream}/types.go` |
+| 5 provider extensions published (`yozora-extensions` @ `4a8bc69`) | **REAL** | All 10 raw.githubusercontent runtime URLs → HTTP 200 |
+| Providers work against live upstreams | **REAL** | Harness 40/40: nhentai search 24 results + cover `image/webp` + pages == gallery `num_pages`; hentaiocean search→episodes→`w2.hentaiocean.com` MP4 `206 video/mp4`; iwara variants resolution `206 video/mp4` (guest search refusal re-verified: `search=` returns identical listing); pmvhaven tag browse → OVH MP4 `206`; hmvmania slug → wp-content MP4 `206` |
+| Install path (what seanime does at install time) | **REAL** | install-sim: `repo.json` → 5 manifests → payload fetch → TS transpile → `new Provider()` → `getSettings()` — all green, marketplace cross-consistent |
+| Extensions load inside a real seanime binary | **BLOCKED** | Go toolchain absent in sandbox (`go: command not found`); goja-faithful harness is interim evidence; must be re-verified on a real build |
+| Iwara keyless search | **NOT IMPLEMENTED (by upstream)** | Guest API ignores `search` (nonsense query returns identical listing) — extension refuses honestly |
+| HMVmania keyless search | **NOT IMPLEMENTED (by upstream)** | WP search does not index video posts — extension returns `[]` honestly |
+| PMVHaven keyless search | **PARTIAL** | Keyless = browse-by-tag (first query word); text search is key-gated upstream (`/api/search` → 401) |
+
+---
+
 ## 1. Architecture
 
 | Area | Status | Evidence |

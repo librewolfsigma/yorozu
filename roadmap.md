@@ -10,6 +10,52 @@
 
 ---
 
+## 0. PIVOT (2026-11-08, user directive): product rebased onto seanime
+
+**Decision.** The owner judged the in-house Next.js client "slop" compared to
+[seanime](https://github.com/5rahim/seanime) (GPL-3.0, Go + React, ~13k★) and
+directed: *fork seanime and implement our goals on it*. This supersedes the
+in-house client track (Phases 1–10 below describe the legacy app — kept for
+reference; the Next.js repo `yorozu` enters maintenance mode until retirement
+is confirmed).
+
+**New topology (verified):**
+
+| Piece | Where | State |
+|---|---|---|
+| App base (fork) | [`librewolfsigma/yozora`](https://github.com/librewolfsigma/yozora) — fork of `5rahim/seanime`, full history, GPL-3.0 preserved | ✅ created 2026-11-08; pristine (no divergent commits — merges from upstream stay trivial) |
+| Provider pack | [`librewolfsigma/yozora-extensions`](https://github.com/librewolfsigma/yozora-extensions) — seanime extension repository (`marketplace.json` + `repo.json` + 5 payloads) | ✅ published, install-sim all green |
+| Legacy Next.js client | `librewolfsigma/yorozu` (this repo) + `yozora-legacy` (stale mirror, renamed) | maintenance mode |
+| Verification harness | `~/work/ext-harness` (goja-faithful shim + live-upstream suites + install simulation) | to be moved into the extensions repo |
+
+**Why this satisfies standing directives faster:**
+
+- *Provider-based sources (Mihon-style)* → seanime's extension runtime **is**
+  the Mihon-style provider architecture (sandboxed goja VMs, `class Provider`
+  contract, extension repositories) — our goals become data+payloads, not app
+  forks of logic.
+- *Real integrations, never simulated* → the five extensions were verified
+  end-to-end against live upstreams before publishing (40/40 checks incl.
+  HTTP `206 video/mp4` Range probes on every stream and `image/webp` page
+  loads; honest refusals where upstream lacks search — see todo Phase R).
+- *SQLite, local-first, no login for the app, real download manager, desktop* →
+  all inherited from seanime natively (SQLite library, local server, torrent +
+  HTTP downloads, desktop builds).
+- *Visual identity conflict (Hikari doc vs Aniyomi theme) — RESOLVED:* both are
+  superseded by seanime's own UI; no further theming work on the legacy app.
+- *Auth/testing directive changes* → seanime is single-user local (matches "no
+  login"); Go-side tests + our extension harness cover the new track.
+
+**Constraints / honest caveats:**
+
+- Go is not installed in the sandbox — the fork cannot be built/run here yet.
+  Extension payloads were verified with a goja-faithful harness instead;
+  loading them inside a real seanime binary is the first pending Phase R task.
+- Iwara/HMVmania have no keyless upstream search (re-verified 2026-11);
+  their extensions refuse/return-empty honestly by design.
+
+---
+
 ## 1. Product vision
 
 Yozora lets one person discover, consume and organize adult media from many existing
