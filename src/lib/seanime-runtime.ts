@@ -30,9 +30,7 @@ export const SEANIME_BIN = path.join(RUNTIME_DIR, "seanime-server");
 export const SEANIME_BASE_URL = `http://${SEANIME_HOST}:${SEANIME_PORT}`;
 
 declare global {
-  // eslint-disable-next-line no-var
   var __yozoraSeanimeBootingV2: Promise<boolean> | null;
-  // eslint-disable-next-line no-var
   var __yozoraSeanimeKeepaliveV2: NodeJS.Timeout | null;
 }
 

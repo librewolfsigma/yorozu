@@ -80,11 +80,50 @@ and implement Yozora's goals on it. See roadmap §0.
 - [x] Recycle-proof provisioning committed: `scripts/provision-yozora-runtime.sh`
   (fast path = ensure binary; `--force` = rebuild web + Go) + `.gitignore`
   entries for `.yozora/ .toolchain/ vendor/`
+- [x] **Custom-source metadata + streaming FIXED end-to-end and verified on the
+  live preview (session F, 2026-11-09)** — user-reported bug "custom source
+  metadata and streaming doesn't work". Three stacked root causes, all fixed:
+  (1) fork code fixes existed but were never deployed — the sandbox recycle
+  wiped `.yozora/runtime`; full provision → rebuild → reinstall → verify cycle
+  run (`probe:` browse 40 entries · episode-list 1 ep · episode-source MP4 ·
+  range probe **206 video/mp4**); (2) **MediaFormat enum violation** — nhentai-cs
+  payload piped the lowercase category tag ("manga") into the AniList format
+  field; Go `BaseManga` unmarshal rejected it (`manga is not a valid MediaFormat`)
+  so getManga ALWAYS failed — listing worked because list results omit the
+  category tag. Fixed payload-side (yozora-extensions `7ae1e22`, format pinned
+  to `MANGA`, category surfaced as first genre) — `probe:` entry API now returns
+  real title/description/cover; (3) **recovery-placeholder cache poisoning** —
+  one failed provider fetch cached the slug-derived placeholder permanently.
+  Fixed fork-side: provider retry-once + real error logged + provisional flag;
+  simulated/anilist platforms never cache provisional media (fork `cdf5509c`).
+  `e2e:` browser on preview origin — manga entry shows real title/tags/273
+  pages; anime entry player **t=4.0s readyState=4** (stream riding the preview
+  proxy). Screenshots: `upload/e2e-custom-source-playing.png`,
+  `upload/e2e-custom-source-manga-metadata.png`
+- [x] Fork hardening shipped with the fix (fork `cdf5509c`): collection
+  metadata refresh now covers paused/planning entries (test spec was red on
+  main — verified pre-existing via stash-diff); `go vet ./...` fully clean
+  (6 deferred time.Since, 2 format strings, ScanLogger mutex copy — TestScanLogger
+  now green, dummy-debrid chunk-size fallback to the 64KiB default);
+  fixture-gated scanner tests skip honestly instead of failing CI
+  (`anilist.IsMissingFixtureError`)
+- [x] Payload hardening (yozora-extensions `dc10d4b`): nhentai-cs getJson
+  bounded to 8s + retry once — matched the onlinestream providers;
+  installed into the live server via the real edit-payload API when the
+  raw CDN lagged the push
 - [!] Real playback chain (episode-list → episode-source → player; manga
-  chapters → pages) — **blocked in sandbox: server runs with SIMULATED AniList
-  token (no account) and empty collection, and episode endpoints require a
-  media in the AniList collection.** Payload logic for these chains is
-  harness-verified (goja-faithful); needs owner run with a real AniList login.
+  chapters → pages) — **custom-source entries: VERIFIED WORKING (above).
+  Still blocked for AniList-collection media: server runs with SIMULATED
+  AniList token (no account) and empty collection, and episode endpoints
+  require a media in the AniList collection.** Needs owner run with a real
+  AniList login.
+- [!] **NEW platform pitfall (session F): disk-pressure reaper.** When rootfs
+  usage crosses ~90%, the platform silently deletes `node_modules` (and other
+  large fresh dirs) within seconds — twice mid-session. Recovery that held:
+  free disk first (removed seanime-web node_modules 684M + Go tarball +
+  `go clean -cache` on the 4.6G build cache → 28% usage), THEN bun install —
+  node_modules survived at 41%. Watchdog should re-order: check disk usage
+  before bun install, and never rebuild Go while the reaper is active.
 - [ ] Move verification harness (`~/work/ext-harness`: harness.ts, install-sim.ts,
   icons.ts) into `yozora-extensions` repo + CI workflow to run it on every push
 - [ ] NSFW-API self-host as a user-config extension (manifest `userConfig`
@@ -294,3 +333,14 @@ Files live in `tests/unit/*.test.ts` (bun test). Run: `bun test`.
   string-throw UX fix shipped after finding Error-object messages get mangled
   by goja rejection export; playback chain deferred to owner's AniList account
   (simulated token in sandbox — see Phase R).
+- **2026-11-09 (session F)** — Recycle recovery + the custom-source bug hunt:
+  provision script rebuilt everything (binary 77M with the previously-shipped
+  custom-source fixes), 9 extensions reinstalled, wizard re-completed via
+  `/api/v1/start`. Deployed fixes verified E2E (browse → metadata → episodes →
+  206 mp4 → player t=4s; manga real metadata + 273 pages). Found + fixed the
+  REAL metadata root cause (MediaFormat enum violation in nhentai-cs payload)
+  and the placeholder-cache poisoning (fork cdf5509c). eslint ignores scoped to
+  the fork era (vendor/.toolchain were being linted); lint clean. NEW pitfall:
+  platform disk-pressure reaper deletes node_modules mid-session — documented
+  recovery order. Next: continue roadmap P1s (search source-selection UI,
+  reader layouts, download manager design).
