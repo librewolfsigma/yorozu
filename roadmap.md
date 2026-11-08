@@ -48,9 +48,14 @@ is confirmed).
 
 **Constraints / honest caveats:**
 
-- Go is not installed in the sandbox — the fork cannot be built/run here yet.
-  Extension payloads were verified with a goja-faithful harness instead;
-  loading them inside a real seanime binary is the first pending Phase R task.
+- ~~Go is not installed in the sandbox~~ **Resolved 2026-11-08 (session C):** Go
+  installed from the official tarball; the fork was **built and run headless**;
+  the extension pack was installed through the real runtime API (5/5 loaded,
+  0 invalid) and real searches verified for all five providers through the
+  server's own endpoints. Remaining: the playback chain (episode-list →
+  episode-source → player; manga chapters → pages) requires a real AniList
+  login — the sandbox server runs with a SIMULATED token and an empty
+  collection; payload logic for those chains is harness-verified.
 - Iwara/HMVmania have no keyless upstream search (re-verified 2026-11);
   their extensions refuse/return-empty honestly by design.
 

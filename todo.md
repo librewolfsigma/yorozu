@@ -34,9 +34,27 @@ and implement Yozora's goals on it. See roadmap §0.
   icons, READMEs, `marketplace.json`, `repo.json`; all 10 runtime raw URLs → 200
 - [x] Install simulation green (repo.json → manifests → payloads → transpile →
   `new Provider()` → getSettings → marketplace consistency)
-- [!] Load extensions inside a real seanime binary — **blocked: Go toolchain not
-  installed in sandbox** (`go: command not found`); try apt/brew-free Go install
-  or verify on owner machine. Harness (goja-faithful) is the interim evidence.
+- [x] **Go toolchain installed (tarball → ~/go), fork server BUILT and RUN headless**
+  (`go build -o /tmp/seanime-test -trimpath -ldflags="-s -w"`; placeholder
+  `web/index.html` satisfies `//go:embed all:web`; server up on 127.0.0.1:43211)
+- [x] **Real-runtime verification of the extension pack** (built binary + live API):
+  install-repository API consumed `repo.json` → all 5 extensions loaded, zero
+  invalid (`POST /api/v1/extensions/all`); real searches through the server:
+  hentaiocean 20 results · pmvhaven results · hmvmania `[]` honest · iwara
+  refusal with full message · nhentai 24 results with covers
+  (`/api/v1/onlinestream/search`, `/api/v1/manga/search`); manual-mapping accepted
+- [x] UX fix from real-runtime finding: goja promise rejections export Error
+  objects as empty maps (message lost) → payloads now throw plain strings;
+  re-verified in real runtime (`promise rejected: iwara: text search needs an
+  Iwara account upstream …`)
+- [x] Install-simulation + 40/40 harness green after the string-throw change;
+  note: raw.githubusercontent CDN served stale payloads for ~4 min after push
+  (reinstall must wait for CDN freshness — documented pitfall)
+- [!] Real playback chain (episode-list → episode-source → player; manga
+  chapters → pages) — **blocked in sandbox: server runs with SIMULATED AniList
+  token (no account) and empty collection, and episode endpoints require a
+  media in the AniList collection.** Payload logic for these chains is
+  harness-verified (goja-faithful); needs owner run with a real AniList login.
 - [ ] Move verification harness (`~/work/ext-harness`: harness.ts, install-sim.ts,
   icons.ts) into `yozora-extensions` repo + CI workflow to run it on every push
 - [ ] CustomSource evaluation: map HMV/PMV browse feeds to a custom-source
@@ -177,3 +195,9 @@ Files live in `tests/unit/*.test.ts` (bun test). Run: `bun test`.
   decision + honest caveats (Go missing in sandbox → real-binary load test pending).
   Legacy Next.js track moved to maintenance. Next: install Go or verify on owner
   machine; move harness into extensions repo; CustomSource browse evaluation.
+- **2026-11-08 (session C cont.)** — Go installed from tarball; **Yozora fork built
+  and run headless**; extension pack installed through the real runtime API
+  (5/5 loaded, 0 invalid) and real searches verified for all five providers;
+  string-throw UX fix shipped after finding Error-object messages get mangled
+  by goja rejection export; playback chain deferred to owner's AniList account
+  (simulated token in sandbox — see Phase R).
