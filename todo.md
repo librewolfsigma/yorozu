@@ -124,6 +124,20 @@ and implement Yozora's goals on it. See roadmap §0.
   `go clean -cache` on the 4.6G build cache → 28% usage), THEN bun install —
   node_modules survived at 41%. Watchdog should re-order: check disk usage
   before bun install, and never rebuild Go while the reaper is active.
+- [ ] **NEXT CYCLE (top pick): make the FULL `go test ./...` green** — full-repo
+  sweep (session F, `/tmp/gotest_full2.log`): 65 packages ok, 7 fail with 33
+  tests. Diagnosed: ~31 are the SAME fixture-gated class already fixed in
+  scanner (missing AniList fixtures → `t.Fatal` instead of skip) in
+  `internal/local`, `internal/library/anime`, `internal/library/autodownloader`,
+  `internal/api/anilist`, partially `internal/notifier` — fix centrally via
+  per-package `TestMain` that skips when `AnimeCollection` fixtures are absent.
+  NOT fixture-related: `goja_bindings TestFetchRedirectOptions/follow`
+  (UPSTREAM-inherited, fails on pristine tree: CF-bypass client retries the
+  302 so `url`/`redirected` report the pre-redirect URL; body/status correct —
+  minor reporting bug, fix in fetch.go response URL derivation) and
+  `db TestDatabaseCleanupManager` (47s, creates ~450MB tempdata — verify on
+  a roomier runner or make the budget configurable). CI currently red on
+  these — the scanner/`vet` fixes in `cdf5509c` were step one.
 - [ ] Move verification harness (`~/work/ext-harness`: harness.ts, install-sim.ts,
   icons.ts) into `yozora-extensions` repo + CI workflow to run it on every push
 - [ ] NSFW-API self-host as a user-config extension (manifest `userConfig`
